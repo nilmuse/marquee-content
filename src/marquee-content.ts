@@ -965,7 +965,7 @@ export class MarqueeContent extends HTMLElement {
     }
 
     if (this.scrollAnimation.playbackRate !== this.currentTimeScale) {
-      this.scrollAnimation.playbackRate = this.currentTimeScale;
+      this.scrollAnimation.updatePlaybackRate(this.currentTimeScale);
     }
 
     return settled;

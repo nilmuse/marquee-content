@@ -93,22 +93,51 @@ Init options (`initMarqueeContents` / `defineMarqueeContent`):
 ## Methods
 
 ```ts
-import type { MarqueeContent } from 'marquee-content'
+import type { MarqueeContent } from 'marquee-content';
 
-const marquee = document.querySelector<MarqueeContent>('marquee-content')
+const marquee = document.querySelector<MarqueeContent>('marquee-content');
 
 marquee?.update({
   mode: 'scroll',
   direction: 'ltr',
   speed: 120,
   pauseOnHover: true,
-})
+});
 
-marquee?.refresh()
+marquee?.refresh();
 ```
 
 - `update(options)` — applies options as attributes and rebuilds the track.
 - `refresh()` — forces a fresh layout rebuild without changing options.
+
+---
+
+## Vue 3 + Vite
+
+Tell the Vue compiler that `marquee-content` is a custom element:
+
+```ts
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+
+export default defineConfig({
+  plugins: [
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag === 'marquee-content',
+        },
+      },
+    }),
+  ],
+});
+```
+
+Then import the package once during app startup:
+
+```ts
+import 'marquee-content';
+```
 
 ---
 
@@ -127,7 +156,7 @@ MarqueeContent.configureStyles({
       --marquee-content-gap: 1.25rem;
     }
   `,
-})
+});
 ```
 
 Useful CSS variables:
@@ -135,35 +164,6 @@ Useful CSS variables:
 - `--marquee-content-gap`
 - `--marquee-content-distance` (runtime)
 - `--marquee-content-duration` (runtime)
-
----
-
-## Vue 3 + Vite
-
-Tell the Vue compiler that `marquee-content` is a custom element:
-
-```ts
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-
-export default defineConfig({
-  plugins: [
-    vue({
-      template: {
-        compilerOptions: {
-          isCustomElement: (tag) => tag === 'marquee-content',
-        },
-      },
-    }),
-  ],
-})
-```
-
-Then import the package once during app startup:
-
-```ts
-import 'marquee-content';
-```
 
 ---
 
