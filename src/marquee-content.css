@@ -12,7 +12,7 @@
   pointer-events: none;
 }
 
-:host([pause-on-hover]:not([pause-on-hover="false"])) {
+:host([data-marquee-content-pause-on-hover]) {
   pointer-events: auto;
 }
 
@@ -47,4 +47,23 @@
 
 .marquee-content__group > * {
   flex: 0 0 auto;
+}
+
+:host([data-marquee-content-reduced-motion]) .marquee-content__track {
+  width: 100%;
+  will-change: auto;
+}
+
+:host([data-marquee-content-reduced-motion]) .marquee-content__group {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  width: 100%;
+  padding-inline-end: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+:host([data-marquee-content-reduced-motion]) .marquee-content__group > * {
+  max-width: 100%;
+  min-width: 0;
 }

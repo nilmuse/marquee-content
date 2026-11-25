@@ -13,6 +13,7 @@ export interface MarqueeContentOptions {
   mode?: MarqueeContentMode | null;
   direction?: MarqueeContentDirection | null;
   pauseOnHover?: boolean | string | null;
+  responsiveSpeed?: boolean | string | null;
 }
 
 interface MarqueeContentResolvedOptions {
@@ -68,13 +69,20 @@ const DEFAULT_OPTIONS: MarqueeContentResolvedOptions = {
   scrollInertiaDuration: 2500,
 };
 
-const OBSERVED_ATTRIBUTES = ['speed', 'mode', 'direction', 'pause-on-hover'] as const;
+const OBSERVED_ATTRIBUTES = [
+  'speed',
+  'mode',
+  'direction',
+  'pause-on-hover',
+  'responsive-speed',
+] as const;
 
 const OPTION_ATTRIBUTE_MAP: Record<keyof MarqueeContentOptions, string> = {
   speed: 'speed',
   mode: 'mode',
   direction: 'direction',
   pauseOnHover: 'pause-on-hover',
+  responsiveSpeed: 'responsive-speed',
 };
 
 const MARQUEE_CONTENT_CSS_PROPS = [
@@ -84,7 +92,8 @@ const MARQUEE_CONTENT_CSS_PROPS = [
 
 const SCROLL_TIME_SCALE_SMOOTHING_SECONDS = 0.12;
 
-const SCROLL_ANIMATION_SEED_ITERATIONS = 500;
+// Server imports do not need a DOM; element construction still requires a browser.
+const HTMLElementBase = (globalThis.HTMLElement ?? class {}) as typeof HTMLElement;
 
 const MARQUEE_CONTENT_RUNTIME_CSS = `
   @keyframes marquee-content-auto {
@@ -117,11 +126,11 @@ const TEMPLATE = `
   <slot class="marquee-content__source"></slot>
 
   <div class="marquee-content__viewport" part="viewport">
-    <div class="marquee-content__track" part="track" aria-hidden="true"></div>
+    <div class="marquee-content__track" part="track" aria-hidden="true" inert></div>
   </div>
 `;
 
-export class MarqueeContent extends HTMLElement {
+export class MarqueeContent extends HTMLElementBase {
   static get observedAttributes(): string[] {
     return [...OBSERVED_ATTRIBUTES];
   }
@@ -138,6 +147,10 @@ export class MarqueeContent extends HTMLElement {
   private static styleOverridesEntry: MarqueeContentStyleEntry = normalizeStyleInput(null);
 
   static configureStyles(options: DefineMarqueeContentOptions = {}): void {
+    if (!('stylesheet' in options) && !('styleOverrides' in options)) {
+      return;
+    }
+
     if ('stylesheet' in options) {
       MarqueeContent.stylesheetEntry = normalizeStyleInput(
         options.stylesheet ?? marqueeContentCssText,
@@ -150,6 +163,7 @@ export class MarqueeContent extends HTMLElement {
 
     MarqueeContent.instances.forEach((instance) => {
       instance.applyAllStyles();
+      instance.scheduleRebuild();
     });
   }
 
@@ -186,6 +200,8 @@ export class MarqueeContent extends HTMLElement {
   private isListeningToScroll = false;
 
   private distance = 0;
+  private containerWidth = 0;
+  private group: HTMLElement | null = null;
 
   private scrollAnimation: Animation | null = null;
   private scrollAnimationDuration = 0;
@@ -200,6 +216,12 @@ export class MarqueeContent extends HTMLElement {
   private lastScrollTime = 0;
 
   constructor() {
+    if (typeof HTMLElement === 'undefined') {
+      throw new Error(
+        '[MarqueeContent] Create elements in a browser, after client initialization.',
+      );
+    }
+
     super();
 
     this.shadow = this.attachShadow({ mode: 'open' });
@@ -233,6 +255,7 @@ export class MarqueeContent extends HTMLElement {
     MarqueeContent.instances.add(this);
 
     this.mounted = true;
+    this.applyAllStyles();
     this.abortController = new AbortController();
     this.options = this.resolveOptions();
 
@@ -243,7 +266,8 @@ export class MarqueeContent extends HTMLElement {
       signal: this.abortController.signal,
     });
 
-    this.shadow.addEventListener('load', this.scheduleRebuild, {
+    // Only source loads should rebuild the track, never loads from its decorative copies.
+    this.addEventListener('load', this.scheduleRebuild, {
       capture: true,
       signal: this.abortController.signal,
     });
@@ -268,7 +292,7 @@ export class MarqueeContent extends HTMLElement {
       signal: this.abortController.signal,
     });
 
-    this.resizeObserver = new ResizeObserver(this.scheduleRebuild);
+    this.resizeObserver = new ResizeObserver(this.handleResize);
     this.resizeObserver.observe(this);
 
     this.intersectionObserver = new IntersectionObserver(this.handleIntersectionChange);
@@ -301,7 +325,7 @@ export class MarqueeContent extends HTMLElement {
     }
 
     this.updateScrollListener();
-    this.scheduleRebuild();
+    this.applyOptions();
   }
 
   get speed(): number {
@@ -336,6 +360,14 @@ export class MarqueeContent extends HTMLElement {
     this.setNullableAttribute('pause-on-hover', value);
   }
 
+  get responsiveSpeed(): boolean {
+    return this.options.responsiveSpeed;
+  }
+
+  set responsiveSpeed(value: boolean | string | null | undefined) {
+    this.setNullableAttribute('responsive-speed', value);
+  }
+
   update(options: MarqueeContentOptions = {}): void {
     Object.entries(options).forEach(([key, value]) => {
       const attributeName = OPTION_ATTRIBUTE_MAP[key as keyof MarqueeContentOptions];
@@ -347,7 +379,7 @@ export class MarqueeContent extends HTMLElement {
 
     this.options = this.resolveOptions();
     this.updateScrollListener();
-    this.scheduleRebuild();
+    this.applyOptions();
   }
 
   refresh(): void {
@@ -396,6 +428,8 @@ export class MarqueeContent extends HTMLElement {
 
     this.abortController?.abort();
 
+    this.group = null;
+    this.containerWidth = 0;
     this.resizeObserver = null;
     this.mutationObserver = null;
     this.intersectionObserver = null;
@@ -405,16 +439,32 @@ export class MarqueeContent extends HTMLElement {
     this.removeAttribute('data-marquee-content-ready');
     this.removeAttribute('data-marquee-content-mode');
     this.removeAttribute('data-marquee-content-pause-on-hover');
+    this.removeAttribute('data-marquee-content-reduced-motion');
 
     MARQUEE_CONTENT_CSS_PROPS.forEach((prop) => {
       this.style.removeProperty(prop);
     });
 
     this.distance = 0;
+    this.isHovered = false;
+    this.isFocused = false;
+    this.isInViewport = true;
+    this.scrollDirectionFactor = 1;
+    this.scrollBoostStartValue = 0;
+    this.scrollBoostStartedAt = 0;
     this.scrollProgress = 0;
     this.currentTimeScale = 1;
     this.lastFrameTime = null;
   }
+
+  private handleResize = (): void => {
+    if (
+      this.clientWidth !== this.containerWidth ||
+      (this.group && Math.abs(this.measureGroup(this.group) - this.distance) > 0.01)
+    ) {
+      this.scheduleRebuild();
+    }
+  };
 
   private handleSlotChange = (): void => {
     this.watchSourceNodes();
@@ -462,6 +512,7 @@ export class MarqueeContent extends HTMLElement {
     }
 
     this.updateAnimationLoopState();
+    this.scheduleRebuild();
   };
 
   private handleScroll = (): void => {
@@ -557,6 +608,50 @@ export class MarqueeContent extends HTMLElement {
     this.rebuildFrameId = null;
   }
 
+  private applyOptions(): void {
+    if (!this.mounted) {
+      return;
+    }
+
+    const progress = this.scrollAnimation
+      ? this.getScrollAnimationProgress()
+      : this.getAutoAnimation()?.effect?.getComputedTiming().progress;
+    const duration = this.distance / this.getCurrentSpeed(this.clientWidth);
+
+    this.setAttribute('data-marquee-content-mode', this.options.mode);
+    this.toggleAttribute('data-marquee-content-pause-on-hover', this.options.pauseOnHover);
+    this.toggleAttribute('data-marquee-content-reduced-motion', this.reducedMotion);
+
+    if (this.distance > 0) {
+      this.style.setProperty('--marquee-content-distance', `${this.distance}px`);
+      this.style.setProperty('--marquee-content-duration', `${duration}s`);
+    }
+
+    if (progress != null) {
+      this.scrollProgress = progress;
+    }
+
+    this.updateAnimationLoopState();
+
+    if (progress != null && this.options.mode === 'auto' && !this.reducedMotion) {
+      const animation = this.getAutoAnimation();
+
+      if (animation) {
+        animation.currentTime =
+          duration * 1000 * (this.options.direction === 'ltr' ? 1 - progress : progress);
+      }
+    }
+  }
+
+  private getAutoAnimation(): Animation | undefined {
+    return this.track
+      .getAnimations()
+      .find(
+        (animation) =>
+          'animationName' in animation && animation.animationName === 'marquee-content-auto',
+      );
+  }
+
   private rebuild(): void {
     if (!this.mounted) {
       return;
@@ -565,65 +660,64 @@ export class MarqueeContent extends HTMLElement {
     this.options = this.resolveOptions();
     this.updateScrollListener();
     this.removeAttribute('data-marquee-content-ready');
-    this.setAttribute('data-marquee-content-mode', this.options.mode);
+    this.toggleAttribute('data-marquee-content-reduced-motion', this.reducedMotion);
+    this.containerWidth = this.clientWidth;
 
-    if (this.options.pauseOnHover) {
-      this.setAttribute('data-marquee-content-pause-on-hover', 'true');
-    } else {
-      this.removeAttribute('data-marquee-content-pause-on-hover');
-    }
-
-    const containerWidth = this.clientWidth;
-
-    if (containerWidth <= 0) {
-      this.distance = 0;
-      this.track.replaceChildren();
-      this.updateAnimationLoopState();
-      return;
+    if (this.group) {
+      this.resizeObserver?.unobserve(this.group);
+      this.group = null;
     }
 
     this.sourceNodes = this.getSourceNodes();
 
-    if (this.sourceNodes.length === 0) {
+    if (this.containerWidth <= 0 || this.sourceNodes.length === 0) {
       this.distance = 0;
       this.track.replaceChildren();
-      this.updateAnimationLoopState();
+      this.applyOptions();
       return;
     }
 
     const group = this.createGroup();
-    const targetWidth = containerWidth * this.options.minGroupWidthRatio;
-
     this.track.replaceChildren(group);
-    this.expandGroupToWidth(group, targetWidth);
 
-    const clone = group.cloneNode(true) as HTMLElement;
+    if (!this.reducedMotion) {
+      this.expandGroupToWidth(group, this.containerWidth * this.options.minGroupWidthRatio);
+      this.track.appendChild(group.cloneNode(true));
+    }
 
-    clone.setAttribute('aria-hidden', 'true');
-    this.track.appendChild(clone);
-
-    this.distance = group.scrollWidth;
+    this.group = group;
+    this.distance = this.measureGroup(group);
+    this.resizeObserver?.observe(group);
 
     if (this.distance <= 0) {
       this.track.replaceChildren();
-      this.updateAnimationLoopState();
+      this.applyOptions();
       return;
     }
 
-    const currentSpeed = this.getCurrentSpeed(containerWidth);
-    const duration = this.distance / currentSpeed;
+    this.setAttribute('data-marquee-content-ready', 'true');
+    this.applyOptions();
+  }
 
-    this.style.setProperty('--marquee-content-distance', `${this.distance}px`);
-    this.style.setProperty('--marquee-content-duration', `${duration}s`);
+  private measureGroup(group: HTMLElement): number {
+    const style = getComputedStyle(group);
+    const width = Number.parseFloat(style.width);
 
-    if (this.reducedMotion) {
-      this.track.style.transform = 'none';
-    } else {
-      this.track.style.transform = '';
+    if (!Number.isFinite(width)) {
+      return group.scrollWidth;
     }
 
-    this.setAttribute('data-marquee-content-ready', 'true');
-    this.updateAnimationLoopState();
+    if (style.boxSizing === 'border-box') {
+      return width;
+    }
+
+    return (
+      width +
+      Number.parseFloat(style.paddingLeft) +
+      Number.parseFloat(style.paddingRight) +
+      Number.parseFloat(style.borderLeftWidth) +
+      Number.parseFloat(style.borderRightWidth)
+    );
   }
 
   private createGroup(): HTMLElement {
@@ -638,7 +732,7 @@ export class MarqueeContent extends HTMLElement {
   }
 
   private expandGroupToWidth(group: HTMLElement, targetWidth: number): void {
-    const sourceSetWidth = group.scrollWidth;
+    const sourceSetWidth = this.measureGroup(group);
 
     if (sourceSetWidth <= 0) {
       return;
@@ -688,7 +782,7 @@ export class MarqueeContent extends HTMLElement {
 
     this.mutationObserver = new MutationObserver(this.scheduleRebuild);
 
-    this.getSourceNodes().forEach((node) => {
+    this.sourceSlot.assignedNodes({ flatten: true }).forEach((node) => {
       if (node.nodeType === Node.ELEMENT_NODE) {
         this.mutationObserver?.observe(node, {
           attributes: true,
@@ -897,8 +991,11 @@ export class MarqueeContent extends HTMLElement {
       },
     );
 
-    animation.currentTime = durationMs * (SCROLL_ANIMATION_SEED_ITERATIONS + progress);
-    animation.playbackRate = this.currentTimeScale;
+    // Reverse the effect while keeping time positive, so long-running motion cannot end at zero.
+    const reversed = this.currentTimeScale < 0;
+    animation.effect?.updateTiming({ direction: reversed ? 'reverse' : 'normal' });
+    animation.currentTime = durationMs * (reversed ? 1 - progress : progress);
+    animation.playbackRate = Math.abs(this.currentTimeScale);
 
     this.scrollAnimation = animation;
     this.scrollAnimationDuration = durationMs;
@@ -933,7 +1030,9 @@ export class MarqueeContent extends HTMLElement {
 
     const fraction = (currentTime / this.scrollAnimationDuration) % 1;
 
-    return fraction < 0 ? fraction + 1 : fraction;
+    const progress = fraction < 0 ? fraction + 1 : fraction;
+
+    return animation.effect?.getTiming().direction === 'reverse' ? (1 - progress) % 1 : progress;
   }
 
   private updateScrollPlaybackRate(now: number, immediate: boolean): boolean {
@@ -964,8 +1063,20 @@ export class MarqueeContent extends HTMLElement {
       this.currentTimeScale = target;
     }
 
-    if (this.scrollAnimation.playbackRate !== this.currentTimeScale) {
-      this.scrollAnimation.updatePlaybackRate(this.currentTimeScale);
+    const reversed = this.currentTimeScale < 0;
+    const effect = this.scrollAnimation.effect;
+
+    if (effect && (effect.getTiming().direction === 'reverse') !== reversed) {
+      const progress = this.getScrollAnimationProgress();
+      effect.updateTiming({ direction: reversed ? 'reverse' : 'normal' });
+      this.scrollAnimation.currentTime =
+        this.scrollAnimationDuration * (reversed ? 1 - progress : progress);
+    }
+
+    const playbackRate = Math.abs(this.currentTimeScale);
+
+    if (this.scrollAnimation.playbackRate !== playbackRate) {
+      this.scrollAnimation.updatePlaybackRate(playbackRate);
     }
 
     return settled;
@@ -1039,6 +1150,10 @@ export class MarqueeContent extends HTMLElement {
       pauseOnHover: this.parseBoolean(
         this.getAttribute('pause-on-hover'),
         DEFAULT_OPTIONS.pauseOnHover,
+      ),
+      responsiveSpeed: this.parseBoolean(
+        this.getAttribute('responsive-speed'),
+        DEFAULT_OPTIONS.responsiveSpeed,
       ),
     };
   }
@@ -1148,7 +1263,9 @@ export function defineMarqueeContent(
   MarqueeContent.configureStyles(options);
 
   if (!window.customElements.get(tagName)) {
-    window.customElements.define(tagName, MarqueeContent);
+    const elementClass =
+      tagName === MARQUEE_CONTENT_TAG ? MarqueeContent : class extends MarqueeContent {};
+    window.customElements.define(tagName, elementClass);
   }
 }
 
