@@ -202,6 +202,7 @@ export class MarqueeContent extends HTMLElementBase {
   private distance = 0;
   private containerWidth = 0;
   private group: HTMLElement | null = null;
+  private layoutPhase: 'source' | 'copies' | null = null;
 
   private scrollAnimation: Animation | null = null;
   private scrollAnimationDuration = 0;
@@ -267,10 +268,16 @@ export class MarqueeContent extends HTMLElementBase {
     });
 
     // Only source loads should rebuild the track, never loads from its decorative copies.
-    this.addEventListener('load', this.scheduleRebuild, {
-      capture: true,
-      signal: this.abortController.signal,
-    });
+    for (const eventName of ['load', 'error']) {
+      this.addEventListener(eventName, this.handleSourceLoad, {
+        capture: true,
+        signal: this.abortController.signal,
+      });
+      this.shadow.addEventListener(eventName, this.completeLayout, {
+        capture: true,
+        signal: this.abortController.signal,
+      });
+    }
 
     this.addEventListener('pointerenter', this.handlePointerEnter, {
       signal: this.abortController.signal,
@@ -429,6 +436,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.abortController?.abort();
 
     this.group = null;
+    this.layoutPhase = null;
     this.containerWidth = 0;
     this.resizeObserver = null;
     this.mutationObserver = null;
@@ -460,8 +468,17 @@ export class MarqueeContent extends HTMLElementBase {
   private handleResize = (): void => {
     if (
       this.clientWidth !== this.containerWidth ||
-      (this.group && Math.abs(this.measureGroup(this.group) - this.distance) > 0.01)
+      (this.group &&
+        this.layoutPhase === null &&
+        Math.abs(this.measureGroup(this.group) - this.distance) > 0.01)
     ) {
+      this.scheduleRebuild();
+    }
+  };
+
+  private handleSourceLoad = (event: Event): void => {
+    // A shadow-tree event may be retargeted to the host; only authored descendants count.
+    if (event.target instanceof Node && event.target !== this && this.contains(event.target)) {
       this.scheduleRebuild();
     }
   };
@@ -615,7 +632,7 @@ export class MarqueeContent extends HTMLElementBase {
 
     const progress = this.scrollAnimation
       ? this.getScrollAnimationProgress()
-      : this.getAutoAnimation()?.effect?.getComputedTiming().progress;
+      : (this.getAutoAnimation()?.effect?.getComputedTiming().progress ?? this.scrollProgress);
     const duration = this.distance / this.getCurrentSpeed(this.clientWidth);
 
     this.setAttribute('data-marquee-content-mode', this.options.mode);
@@ -659,6 +676,17 @@ export class MarqueeContent extends HTMLElementBase {
 
     this.options = this.resolveOptions();
     this.updateScrollListener();
+    const progress = this.scrollAnimation
+      ? this.getScrollAnimationProgress()
+      : this.getAutoAnimation()?.effect?.getComputedTiming().progress;
+
+    if (progress != null) {
+      this.scrollProgress = progress;
+    }
+
+    this.distance = 0;
+    this.layoutPhase = null;
+    this.updateAnimationLoopState();
     this.removeAttribute('data-marquee-content-ready');
     this.toggleAttribute('data-marquee-content-reduced-motion', this.reducedMotion);
     this.containerWidth = this.clientWidth;
@@ -677,15 +705,39 @@ export class MarqueeContent extends HTMLElementBase {
       return;
     }
 
-    const group = this.createGroup();
-    this.track.replaceChildren(group);
+    this.group = this.createGroup();
+    this.track.replaceChildren(this.group);
+    this.layoutPhase = 'source';
+    this.completeLayout();
+  }
 
-    if (!this.reducedMotion) {
-      this.expandGroupToWidth(group, this.containerWidth * this.options.minGroupWidthRatio);
-      this.track.appendChild(group.cloneNode(true));
+  private completeLayout = (): void => {
+    const group = this.group;
+
+    if (!this.mounted || !group || this.layoutPhase === null) {
+      return;
     }
 
-    this.group = group;
+    // Firefox can load a cached clone asynchronously. Measure its real intrinsic size first,
+    // then finish the repeated copies without replacing the already loaded source group.
+    if (this.hasPendingImages(this.track)) {
+      return;
+    }
+
+    if (this.layoutPhase === 'source') {
+      this.layoutPhase = 'copies';
+
+      if (!this.reducedMotion) {
+        this.expandGroupToWidth(group, this.containerWidth * this.options.minGroupWidthRatio);
+        this.track.appendChild(group.cloneNode(true));
+      }
+
+      if (this.hasPendingImages(this.track)) {
+        return;
+      }
+    }
+
+    this.layoutPhase = null;
     this.distance = this.measureGroup(group);
     this.resizeObserver?.observe(group);
 
@@ -697,6 +749,10 @@ export class MarqueeContent extends HTMLElementBase {
 
     this.setAttribute('data-marquee-content-ready', 'true');
     this.applyOptions();
+  };
+
+  private hasPendingImages(root: ParentNode): boolean {
+    return Array.from(root.querySelectorAll('img')).some((image) => !image.complete);
   }
 
   private measureGroup(group: HTMLElement): number {
@@ -762,6 +818,15 @@ export class MarqueeContent extends HTMLElementBase {
       const currentPart = clone.getAttribute('part');
 
       clone.setAttribute('part', currentPart ? `${currentPart} item` : 'item');
+
+      // Offscreen lazy copies still need intrinsic dimensions before the loop can be measured.
+      if (clone instanceof HTMLImageElement) {
+        clone.loading = 'eager';
+      }
+
+      clone.querySelectorAll('img').forEach((image) => {
+        image.loading = 'eager';
+      });
     }
 
     return clone;

@@ -98,6 +98,102 @@ test('image loading settles instead of continually replacing rendered groups', a
   await expectMatchingDistance(host);
 });
 
+test('measures lazy image copies offscreen without overriding CSS aspect ratio', async ({
+  page,
+}) => {
+  await page.route('**/lazy-logo.svg', (route) =>
+    route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="60"/>',
+    }),
+  );
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const style = document.createElement('style');
+      style.textContent =
+        '#fixture { margin-top: 10000px; } marquee-content::part(logo) { height: 30px; width: auto; }';
+      document.head.append(style);
+    });
+  });
+  const host = await mount(
+    page,
+    '<img src="/lazy-logo.svg" part="logo" loading="lazy" alt="Lazy brand">',
+  );
+  const copy = host.locator('[part~="track"] img').first();
+  await expect(copy).toHaveCSS('width', '90px');
+  await expect(copy).toHaveCSS('height', '30px');
+  await expect(host.locator(':scope > img')).toHaveAttribute('loading', 'lazy');
+  await expectMatchingDistance(host);
+  const groupWidth = await host
+    .locator('[part~="group"]')
+    .first()
+    .evaluate((group) => group.getBoundingClientRect().width);
+  expect(groupWidth).toBeGreaterThanOrEqual(400);
+  expect(groupWidth).toBeLessThan(800);
+  await expect.poll(() => renderedReplacements(host)).toBe(0);
+});
+
+test('failed images finish layout without repeated reconstruction', async ({ page }) => {
+  await page.route('**/missing-logo.svg', (route) => route.fulfill({ status: 404, body: '' }));
+  const host = await mount(page, '<img src="/missing-logo.svg" alt="Unavailable brand">');
+  await expect
+    .poll(() =>
+      host
+        .locator('[part~="track"] img')
+        .evaluateAll((images) => images.every((image) => (image as HTMLImageElement).complete)),
+    )
+    .toBe(true);
+  await expectMatchingDistance(host);
+  await expect.poll(() => renderedReplacements(host)).toBe(0);
+});
+
+test('pending image loads cannot finish layout after the element is removed', async ({ page }) => {
+  let release = () => {};
+  const responseReady = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/slow-logo.svg', async (route) => {
+    await responseReady;
+    await route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="60"/>',
+    });
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => Boolean(window.marqueeApi));
+  const request = page.waitForRequest('**/slow-logo.svg');
+  await page.locator('#fixture').evaluate((fixture) => {
+    fixture.innerHTML =
+      '<marquee-content><img src="/slow-logo.svg" alt="Slow brand"></marquee-content>';
+  });
+  await request;
+  const host = page.locator('marquee-content');
+  const element = await host.elementHandle();
+  if (!element) throw new Error('Source component is missing');
+  try {
+    await expect(host).not.toHaveAttribute('data-marquee-content-ready', 'true');
+    await element.evaluate((node) => node.remove());
+  } finally {
+    release();
+  }
+  await expect
+    .poll(() =>
+      element.evaluate((node) => (node.querySelector('img') as HTMLImageElement).complete),
+    )
+    .toBe(true);
+  const state = await element.evaluate(async (node) => {
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    const track = node.shadowRoot?.querySelector('[part~="track"]');
+    return {
+      ready: node.hasAttribute('data-marquee-content-ready'),
+      items: track?.childElementCount,
+      animations: track?.getAnimations().length,
+    };
+  });
+  expect(state).toEqual({ ready: false, items: 0, animations: 0 });
+});
+
 test('recalculates after an image source changes its intrinsic size', async ({ page }) => {
   await page.route('**/logo-*.svg', (route) => {
     const width = route.request().url().includes('wide') ? 300 : 75;
@@ -462,7 +558,8 @@ test('scroll movement in the reverse direction keeps running across the old zero
     const animation = element.getAnimations()[0];
     animation.pause();
     await animation.ready;
-    // WebKit rounds getTiming().duration; that rounding accumulates over a million cycles.
+    // CSS and native durations are quantized differently across engines. Ten thousand cycles
+    // exceed the old 500-cycle budget without magnifying sub-nanosecond period rounding.
     const duration =
       Number.parseFloat(getComputedStyle(element).getPropertyValue('--marquee-content-duration')) *
       1000;
@@ -470,7 +567,7 @@ test('scroll movement in the reverse direction keeps running across the old zero
     await new Promise((resolve) => requestAnimationFrame(resolve));
     const initial = new DOMMatrixReadOnly(getComputedStyle(element).transform).m41;
     const initialProgress = animation.effect?.getComputedTiming().progress;
-    animation.currentTime = duration * (1_000_000 + 0.25);
+    animation.currentTime = duration * (10_000 + 0.25);
     await new Promise((resolve) => requestAnimationFrame(resolve));
     const later = new DOMMatrixReadOnly(getComputedStyle(element).transform).m41;
     const laterProgress = animation.effect?.getComputedTiming().progress;
