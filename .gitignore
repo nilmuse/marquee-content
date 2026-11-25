@@ -23,3 +23,7 @@ dist/
 
 # Handoff notes (local only)
 HANDOFF.md
+
+test-results/
+
+playwright-report/

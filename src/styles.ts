@@ -8,7 +8,7 @@ export interface MarqueeContentStyleEntry {
   cssText: string;
 }
 
-export const marqueeContentCssText = DEFAULT_CSS_TEXT;
+export const marqueeContentCssText: string = DEFAULT_CSS_TEXT;
 
 export function createConstructableStyleSheet(cssText: string): CSSStyleSheet | null {
   if (
