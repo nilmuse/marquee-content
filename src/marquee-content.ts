@@ -207,6 +207,8 @@ export class MarqueeContent extends HTMLElementBase {
   private scrollAnimationDuration = 0;
   private scrollAnimationDistance = 0;
   private scrollProgress = 0;
+  private scrollMotionActive = false;
+  private scrollBaseSpeed = DEFAULT_OPTIONS.speed;
 
   private scrollDirectionFactor: 1 | -1 = 1;
   private currentTimeScale = 1;
@@ -467,6 +469,8 @@ export class MarqueeContent extends HTMLElementBase {
     this.scrollBoostStartValue = 0;
     this.scrollBoostStartedAt = 0;
     this.scrollProgress = 0;
+    this.scrollMotionActive = false;
+    this.scrollBaseSpeed = DEFAULT_OPTIONS.speed;
     this.currentTimeScale = 1;
     this.lastFrameTime = null;
   }
@@ -581,13 +585,16 @@ export class MarqueeContent extends HTMLElementBase {
       return;
     }
 
-    this.ensureScrollAnimation();
-
-    if (!this.scrollAnimation || !this.canAnimate()) {
+    if (!this.canAnimate() || this.distance <= 0) {
       return;
     }
 
-    this.scrollAnimation.play();
+    if (!this.scrollMotionActive) {
+      this.cancelScrollAnimation();
+      this.scrollMotionActive = true;
+      this.renderScrollProgress();
+    }
+
     this.startAnimationLoop();
   }
 
@@ -639,7 +646,8 @@ export class MarqueeContent extends HTMLElementBase {
     const progress = this.scrollAnimation
       ? this.getScrollAnimationProgress()
       : (this.getAutoAnimation()?.effect?.getComputedTiming().progress ?? this.scrollProgress);
-    const duration = this.distance / this.getCurrentSpeed(this.clientWidth);
+    this.scrollBaseSpeed = this.getCurrentSpeed(this.clientWidth);
+    const duration = this.distance / this.scrollBaseSpeed;
 
     this.setAttribute('data-marquee-content-mode', this.options.mode);
     this.toggleAttribute('data-marquee-content-pause-on-hover', this.options.pauseOnHover);
@@ -925,16 +933,32 @@ export class MarqueeContent extends HTMLElementBase {
       this.stopCssAnimation();
       this.cancelScrollAnimation();
 
-      if (this.reducedMotion) {
-        this.track.style.transform = 'none';
+      // A rebuild temporarily has no distance. Keep its phase and speed until layout
+      // completes, while mode changes and reduced motion leave the active path.
+      if (!this.mounted || this.options.mode !== 'scroll' || this.reducedMotion) {
+        this.scrollMotionActive = false;
       }
 
+      this.track.style.transform = this.reducedMotion ? 'none' : '';
       return;
     }
 
     if (this.options.mode === 'scroll') {
       this.stopCssAnimation();
-      this.track.style.transform = '';
+
+      if (this.scrollMotionActive) {
+        this.renderScrollProgress();
+
+        if (this.canAnimate()) {
+          this.startAnimationLoop();
+        } else {
+          this.stopAnimationLoop();
+        }
+
+        return;
+      }
+
+      this.currentTimeScale = this.getDirectionFactor() * this.scrollDirectionFactor;
       this.ensureScrollAnimation();
 
       if (!this.scrollAnimation || !this.canAnimate()) {
@@ -943,15 +967,22 @@ export class MarqueeContent extends HTMLElementBase {
         return;
       }
 
-      this.scrollAnimation.play();
-      this.updateScrollPlaybackRate(performance.now(), true);
-      this.startAnimationLoop();
+      if (this.scrollBoostStartValue !== 0) {
+        this.onScrollBoostChanged();
+      } else {
+        this.track.style.transform = '';
+
+        if (this.scrollAnimation.playState !== 'running') {
+          this.scrollAnimation.play();
+        }
+      }
 
       return;
     }
 
     this.stopAnimationLoop();
     this.cancelScrollAnimation();
+    this.scrollMotionActive = false;
     this.startCssAnimation();
     this.track.style.animationPlayState = this.canAnimate() ? 'running' : 'paused';
   }
@@ -1027,16 +1058,22 @@ export class MarqueeContent extends HTMLElementBase {
       this.distance <= 0 ||
       this.reducedMotion ||
       !this.canAnimate() ||
-      !this.scrollAnimation
+      !this.scrollMotionActive
     ) {
       return;
     }
 
-    const settled = this.updateScrollPlaybackRate(now, false);
+    const settled = this.advanceScrollMotion(now);
 
-    if (!settled) {
-      this.animationFrameId = requestAnimationFrame(this.tick);
+    if (settled) {
+      this.scrollMotionActive = false;
+      this.ensureScrollAnimation();
+      this.track.style.transform = '';
+      this.lastFrameTime = null;
+      return;
     }
+
+    this.animationFrameId = requestAnimationFrame(this.tick);
   };
 
   private ensureScrollAnimation(): void {
@@ -1045,8 +1082,9 @@ export class MarqueeContent extends HTMLElementBase {
       return;
     }
 
-    const currentSpeed = this.getCurrentSpeed(this.clientWidth);
+    const currentSpeed = this.scrollBaseSpeed;
     const durationMs = currentSpeed > 0 ? (this.distance / currentSpeed) * 1000 : 0;
+    const reversed = this.currentTimeScale < 0;
 
     if (durationMs <= 0) {
       this.cancelScrollAnimation();
@@ -1056,21 +1094,16 @@ export class MarqueeContent extends HTMLElementBase {
     if (
       this.scrollAnimation &&
       this.scrollAnimationDistance === this.distance &&
-      this.scrollAnimationDuration === durationMs
+      this.scrollAnimationDuration === durationMs &&
+      this.scrollAnimation.effect?.getTiming().direction === (reversed ? 'reverse' : 'normal')
     ) {
       return;
     }
 
     const progress = this.getScrollAnimationProgress();
-    const hadAnimation = this.scrollAnimation !== null;
-
     if (this.scrollAnimation) {
       this.scrollAnimation.cancel();
       this.scrollAnimation = null;
-    }
-
-    if (!hadAnimation) {
-      this.currentTimeScale = this.getDirectionFactor() * this.scrollDirectionFactor;
     }
 
     const animation = this.track.animate(
@@ -1086,7 +1119,6 @@ export class MarqueeContent extends HTMLElementBase {
     );
 
     // Reverse the effect while keeping time positive, so long-running motion cannot end at zero.
-    const reversed = this.currentTimeScale < 0;
     animation.effect?.updateTiming({ direction: reversed ? 'reverse' : 'normal' });
     animation.currentTime = durationMs * (reversed ? 1 - progress : progress);
     animation.playbackRate = Math.abs(this.currentTimeScale);
@@ -1139,26 +1171,17 @@ export class MarqueeContent extends HTMLElementBase {
       : normalized;
   }
 
-  private updateScrollPlaybackRate(now: number, immediate: boolean): boolean {
-    if (!this.scrollAnimation) {
-      return true;
-    }
-
+  private advanceScrollMotion(now: number): boolean {
     const target = this.getCurrentTimeScale(now);
+    const previousTimeScale = this.currentTimeScale;
+    const previousTime = this.lastFrameTime ?? now;
+    const deltaTime = this.clamp((now - previousTime) / 1000, 0, 0.064);
 
-    if (immediate) {
-      this.currentTimeScale = target;
-      this.lastFrameTime = now;
-    } else {
-      const previousTime = this.lastFrameTime ?? now;
-      const deltaTime = Math.min((now - previousTime) / 1000, 0.064);
+    this.lastFrameTime = now;
 
-      this.lastFrameTime = now;
+    const smoothingFactor = 1 - Math.exp(-deltaTime / SCROLL_TIME_SCALE_SMOOTHING_SECONDS);
 
-      const smoothingFactor = 1 - Math.exp(-deltaTime / SCROLL_TIME_SCALE_SMOOTHING_SECONDS);
-
-      this.currentTimeScale += (target - this.currentTimeScale) * smoothingFactor;
-    }
+    this.currentTimeScale += (target - this.currentTimeScale) * smoothingFactor;
 
     const settled =
       this.scrollBoostStartValue === 0 && Math.abs(target - this.currentTimeScale) < 0.001;
@@ -1167,23 +1190,20 @@ export class MarqueeContent extends HTMLElementBase {
       this.currentTimeScale = target;
     }
 
-    const reversed = this.currentTimeScale < 0;
-    const effect = this.scrollAnimation.effect;
+    // Keep changing speed on the frame clock, without resynchronizing an accelerated
+    // WAAPI animation on every frame. Idle motion returns to WAAPI after settling.
+    const averageTimeScale = (previousTimeScale + this.currentTimeScale) / 2;
+    const progress =
+      this.scrollProgress + (this.scrollBaseSpeed * averageTimeScale * deltaTime) / this.distance;
 
-    if (effect && (effect.getTiming().direction === 'reverse') !== reversed) {
-      const progress = this.getScrollAnimationProgress();
-      effect.updateTiming({ direction: reversed ? 'reverse' : 'normal' });
-      this.scrollAnimation.currentTime =
-        this.scrollAnimationDuration * (reversed ? 1 - progress : progress);
-    }
-
-    const playbackRate = Math.abs(this.currentTimeScale);
-
-    if (this.scrollAnimation.playbackRate !== playbackRate) {
-      this.scrollAnimation.updatePlaybackRate(playbackRate);
-    }
+    this.scrollProgress = ((progress % 1) + 1) % 1;
+    this.renderScrollProgress();
 
     return settled;
+  }
+
+  private renderScrollProgress(): void {
+    this.track.style.transform = `translate3d(${-this.scrollProgress * this.distance}px, 0, 0)`;
   }
 
   private getCurrentTimeScale(now: number): number {

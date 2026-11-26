@@ -43,6 +43,9 @@
   white-space: nowrap;
   color: inherit;
   font: inherit;
+  /* Isolate repeated groups when WebKit changes tiles at an iteration boundary.
+     https://bugs.webkit.org/show_bug.cgi?id=269284 */
+  will-change: transform;
 }
 
 .marquee-content__group > * {
@@ -61,6 +64,7 @@
   padding-inline-end: 0;
   white-space: normal;
   overflow-wrap: anywhere;
+  will-change: auto;
 }
 
 :host([data-marquee-content-reduced-motion]) .marquee-content__group > * {
