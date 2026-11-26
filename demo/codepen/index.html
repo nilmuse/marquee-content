@@ -1,0 +1,78 @@
+<main class="demo">
+  <header class="masthead">
+    <a class="wordmark" href="https://www.npmjs.com/package/marquee-content" target="_blank" rel="noreferrer">marquee-content <span>7.0.0-dev.0</span></a>
+    <nav aria-label="Project links">
+      <a href="https://github.com/nilmuse/marquee-content#readme" target="_blank" rel="noreferrer">Docs ↗</a>
+      <a href="https://www.npmjs.com/package/marquee-content" target="_blank" rel="noreferrer">npm ↗</a>
+    </nav>
+  </header>
+
+  <section class="intro" aria-labelledby="page-title">
+    <p class="eyebrow"><span class="status-dot"></span> THE INTERACTIVE PLAYGROUND</p>
+    <h1 id="page-title">Text. Logos.<br><span class="title-secondary">On the move.</span></h1>
+    <p class="intro-copy">A lightweight Web Component for decorative text and image rows. Find your rhythm, then take the code.</p>
+  </section>
+
+  <section class="playground" aria-label="Marquee playground">
+    <div class="preview-toolbar">
+      <div class="example-picker" role="group" aria-label="Example content">
+        <button type="button" data-example="text" aria-pressed="true">Text</button>
+        <button type="button" data-example="images" aria-pressed="false">Images</button>
+      </div>
+      <button class="quiet-button" id="visibility" type="button" aria-controls="preview-stage" aria-expanded="true">Hide preview</button>
+    </div>
+
+    <div class="preview-stage" id="preview-stage" aria-busy="true">
+      <div class="preview-surface" id="preview-surface">
+        <marquee-content class="sample sample--text" id="sample" speed="90" direction="rtl" mode="auto" responsive-speed="false" pause-on-hover="false">
+          <span part="presto">Presto</span>
+          <span part="tempo">Tempo</span>
+          <span part="vomero">Vomero</span>
+          <span part="pegasus">Pegasus</span>
+        </marquee-content>
+      </div>
+      <p class="load-message" id="load-message" role="status">Loading the component…</p>
+    </div>
+
+    <div class="preview-meta">
+      <label class="width-control" for="width">Container <input id="width" type="range" min="35" max="100" value="100"><output id="width-value" for="width">100%</output></label>
+      <span id="speed-summary">Measuring container…</span>
+    </div>
+    <p class="motion-note" id="motion-note" aria-live="polite"></p>
+    <p class="error-note" id="load-error" role="alert" hidden>The component could not load. Check your connection, then <button type="button" id="retry">try again</button>.</p>
+
+    <div class="workspace">
+      <form class="controls" id="controls" aria-label="Marquee settings">
+        <div class="section-heading"><h2>Make it yours</h2><button class="quiet-button" type="reset">Reset</button></div>
+        <div class="select-row">
+          <label for="mode">Movement<select id="mode"><option value="auto">Continuous</option><option value="scroll">Page scroll</option></select></label>
+          <label for="direction">Base direction<select id="direction"><option value="rtl">← Right to left</option><option value="ltr">Left to right →</option></select></label>
+        </div>
+        <label class="range-label" for="speed"><span>Base speed <output id="speed-value" for="speed">90 px/s</output></span><input id="speed" type="range" min="10" max="500" step="5" value="90"></label>
+        <label class="range-label" for="gap"><span>Item gap <output id="gap-value" for="gap">40 px</output></span><input id="gap" type="range" min="8" max="96" step="4" value="40"></label>
+        <label class="check-label" for="responsive"><input id="responsive" type="checkbox"><span>Responsive speed<small>Enable automatic slowing in narrow containers, down to 55%.</small></span></label>
+        <label class="check-label" for="hover"><input id="hover" type="checkbox"><span>Pause on hover<small>Hover over the row to pause movement.</small></span></label>
+        <p class="scroll-hint" id="scroll-hint" hidden>Scroll this page to change the direction and speed. Movement eases back to its base speed when you stop.</p>
+      </form>
+
+      <section class="code-panel" aria-label="Generated example code">
+        <div class="section-heading"><h2>Take the code</h2><button class="quiet-button" id="copy-tab" type="button">Copy HTML</button></div>
+        <div class="code-tabs" role="tablist" aria-label="Code language">
+          <button id="tab-html" type="button" role="tab" aria-selected="true" aria-controls="code-output" tabindex="0" data-language="html">HTML</button>
+          <button id="tab-css" type="button" role="tab" aria-selected="false" aria-controls="code-output" tabindex="-1" data-language="css">CSS</button>
+          <button id="tab-js" type="button" role="tab" aria-selected="false" aria-controls="code-output" tabindex="-1" data-language="js">JS</button>
+        </div>
+        <pre id="code-output" role="tabpanel" aria-labelledby="tab-html" tabindex="0"><code id="generated-code"></code></pre>
+        <div class="code-footer"><span>Pinned to 7.0.0-dev.0 · no CSS import needed</span><button class="primary-button" id="copy-full" type="button">Copy full example ↗</button></div>
+        <label class="copy-fallback" id="copy-fallback" hidden>Clipboard unavailable. Select and copy this code:<textarea id="fallback-code" readonly rows="6"></textarea></label>
+        <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+  </section>
+
+  <footer class="notes">
+    <div><span class="note-number">01 / STYLING</span><h2>Your type. Your identity.</h2><p>Set typography on the host. Use <code>::part(item)</code> for every image, or custom tokens such as <code>::part(presto)</code> for an individual item.</p></div>
+    <div><span class="note-number">02 / MOTION</span><h2>Made to respect preferences.</h2><p id="preference-note">Reduced motion follows your device setting: one static, wrapping set of content. Use “Hide preview” above to hide this demo at any time.</p></div>
+    <p class="scope-note">For decorative text and images. Keep links, buttons, and other interactive controls outside the moving row.</p>
+  </footer>
+</main>

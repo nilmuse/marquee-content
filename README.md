@@ -66,8 +66,8 @@ Calling a registration helper is only needed for an additional tag or global sty
 
 | Option (HTML / JavaScript) | Type | Default | Description |
 | --- | --- | --- | --- |
-| `speed` | `number` | `90` | Base speed in px/s, clamped to `10`–`500` before responsive scaling. |
-| `responsive-speed` / `responsiveSpeed` | `boolean` | `true` | Scales the base speed with the component's width. Set to `false` to use the requested base px/s. |
+| `speed` | `number` | `90` | Base speed in px/s, clamped to `10`–`500`. Used unchanged unless responsive speed is enabled. |
+| `responsive-speed` / `responsiveSpeed` | `boolean` | `false` | Automatically reduces movement speed in narrow containers when enabled. |
 | `mode` | `'auto' \| 'scroll'` | `'auto'` | `'auto'` for constant movement; `'scroll'` for page-scroll response and inertia. |
 | `direction` | `'rtl' \| 'ltr'` | `'rtl'` | Base direction: right to left or left to right. |
 | `pause-on-hover` / `pauseOnHover` | `boolean` | `false` | Pauses movement while the pointer is over the host. Items remain decorative and inert. |
@@ -108,21 +108,15 @@ To react to page scrolling:
 
 `scroll` listens to the window's vertical scroll position. Its direction follows scrolling, and its speed boost decays after scrolling stops. A custom scroll container is not currently configurable.
 
-## Speed on narrow screens
+## Responsive speed
 
-Responsive speed is enabled by default. It uses the **component's width**, in CSS pixels:
+Responsive speed is disabled by default. In `auto` mode, `speed="90"` gives `90px/s` at any container width. In `scroll` mode, it sets the base speed; scrolling and inertia intentionally change it.
 
-```text
-effective speed = speed × clamp(component width / 1280, 0.55, 1)
-```
-
-Below a component width of about `700px`, speed stays at 55% of the configured value — about `50px/s` with the default `speed="90"`. At `1280px` and above, it uses the configured speed without scaling.
-
-For the same base speed on mobile and desktop, disable scaling:
+Enable responsive speed to automatically slow movement in narrow containers:
 
 ```html
-<marquee-content speed="90" responsive-speed="false">
-  <span>Consistent speed across screen sizes</span>
+<marquee-content speed="90" responsive-speed>
+  <span>Slower movement in narrow containers</span>
 </marquee-content>
 ```
 
@@ -130,13 +124,20 @@ For the same base speed on mobile and desktop, disable scaling:
 const marquee = document.querySelector('marquee-content');
 
 if (marquee) {
-  marquee.responsiveSpeed = false;
-  marquee.speed = 90;
-  // Equivalent: marquee.update({ responsiveSpeed: false, speed: 90 });
+  marquee.responsiveSpeed = true;
+  // Equivalent: marquee.update({ responsiveSpeed: true });
 }
 ```
 
-In `auto` mode, this gives `90px/s`. In `scroll` mode, `90px/s` is the base speed; scrolling and inertia intentionally change it.
+When enabled, scaling uses the **component's width**, in CSS pixels:
+
+```text
+effective base speed = speed × clamp(component width / 1280, 0.55, 1)
+```
+
+At widths up to `704px` (`1280 × 0.55`), speed stays at 55% of the configured value: `speed="90"` becomes `49.5px/s`. Between `704px` and `1280px`, it increases linearly. At `1280px` and above, it uses the configured speed without scaling.
+
+Remove the attribute or set `responsive-speed="false"` to disable scaling again.
 
 ## Vue 3 with Vite
 
