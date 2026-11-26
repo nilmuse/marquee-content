@@ -7,35 +7,13 @@ A Web Component for decorative text tickers, logo strips, and continuous image r
 
 [Demo](https://codepen.io/nilmuse/pen/dygzqYm)
 
----
-
-## Features
-
-- A `<marquee-content>` custom element for plain HTML and framework applications.
-- Continuous motion in either direction, using CSS animation in `auto` mode.
-- A `scroll` mode that changes direction and speed with page scrolling, then eases back to its base speed.
-- Optional hover pausing and automatic pausing outside the viewport.
-- A static, wrapping presentation when the user prefers reduced motion.
-- Styling through inherited host properties, CSS variables, and `::part()`.
-- Automatic layout updates for source content, images, fonts, and size changes.
-
-### Supported content
-
-Use the component for decorative text and images. The rendered row consists of copies of the supplied content; those copies are hidden from assistive technology and inert. Keep links, buttons, forms, and other interactive controls outside the moving row.
-
-Apply text styles to the host and item styles through the exposed CSS parts. The component copies markup, including custom `part` tokens; event listeners, application state, and document-level class selectors are not a styling or interaction contract for the rendered copies.
-
----
-
 ## Installation
 
 ```bash
 npm install marquee-content
 ```
 
----
-
-## Quick Start
+## Quick start
 
 Import the package in your browser entry point. This registers the default tag and installs its Shadow DOM styles:
 
@@ -59,18 +37,7 @@ marquee-content {
 }
 ```
 
-To react to page scrolling:
-
-```html
-<marquee-content speed="120" mode="scroll" direction="ltr">
-  <span>New collection</span>
-  <span>Made to move</span>
-</marquee-content>
-```
-
-`scroll` listens to the window's vertical scroll position. Its direction follows scrolling, and its speed boost decays after scrolling stops. A custom scroll container is not currently configurable.
-
----
+In the default `auto` mode, the row moves continuously using CSS animation. Layout updates automatically when source content, images, fonts, or sizes change.
 
 ## API
 
@@ -95,53 +62,19 @@ initMarqueeContents({
 
 Calling a registration helper is only needed for an additional tag or global style setup.
 
----
-
-## Options
+### Options
 
 | Option (HTML / JavaScript) | Type | Default | Description |
 | --- | --- | --- | --- |
-| `speed` | `number` | `90` | Base speed in px/s, clamped to `10`–`500` before responsive scaling. |
-| `responsive-speed` / `responsiveSpeed` | `boolean` | `true` | Scales the base speed with the component's width. Set to `false` to use the requested base px/s. |
+| `speed` | `number` | `90` | Base speed in px/s, clamped to `10`–`500`. Used unchanged unless responsive speed is enabled. |
+| `responsive-speed` / `responsiveSpeed` | `boolean` | `false` | Automatically reduces movement speed in narrow containers when enabled. |
 | `mode` | `'auto' \| 'scroll'` | `'auto'` | `'auto'` for constant movement; `'scroll'` for page-scroll response and inertia. |
 | `direction` | `'rtl' \| 'ltr'` | `'rtl'` | Base direction: right to left or left to right. |
 | `pause-on-hover` / `pauseOnHover` | `boolean` | `false` | Pauses movement while the pointer is over the host. Items remain decorative and inert. |
 
 Boolean attributes accept `true` or `false`; an empty attribute enables the option. Removing an attribute restores its default.
 
-### Speed on narrow screens
-
-Responsive speed is enabled by default. It uses the **component's width**, in CSS pixels:
-
-```text
-effective speed = speed × clamp(component width / 1280, 0.55, 1)
-```
-
-At widths up to `704px`, the multiplier is `0.55`: the default `90` becomes `49.5px/s`. At `1280px` and wider, it remains `90px/s`. This preserves the existing slower movement on narrow layouts.
-
-For the same base speed on mobile and desktop, disable scaling:
-
-```html
-<marquee-content speed="90" responsive-speed="false">
-  <span>Consistent speed across screen sizes</span>
-</marquee-content>
-```
-
-```ts
-const marquee = document.querySelector('marquee-content');
-
-if (marquee) {
-  marquee.responsiveSpeed = false;
-  marquee.speed = 90;
-  // Equivalent: marquee.update({ responsiveSpeed: false, speed: 90 });
-}
-```
-
-In `auto` mode, this gives `90px/s`. In `scroll` mode, `90px/s` is the base speed; scrolling and inertia intentionally change it.
-
----
-
-## Methods
+### Methods
 
 ```ts
 import 'marquee-content';
@@ -162,15 +95,51 @@ marquee?.refresh();
 - `update(options)` applies options as attributes and updates the animation settings.
 - `refresh()` schedules a fresh layout measurement. Use it after application-driven changes that need an explicit refresh.
 
----
+## Scroll response
 
-## Framework integration
+To react to page scrolling:
 
-### Server-rendered applications
+```html
+<marquee-content speed="120" mode="scroll" direction="ltr">
+  <span>New collection</span>
+  <span>Made to move</span>
+</marquee-content>
+```
 
-The module can be imported when browser globals are unavailable. Custom element registration and construction require a browser. Render the declarative tag in server-generated HTML and ensure the package also runs in the browser entry point; the animated Shadow DOM track is built there.
+`scroll` listens to the window's vertical scroll position. Its direction follows scrolling, and its speed boost decays after scrolling stops. A custom scroll container is not currently configurable.
 
-### Vue 3 + Vite
+## Responsive speed
+
+Responsive speed is disabled by default. In `auto` mode, `speed="90"` gives `90px/s` at any container width. In `scroll` mode, it sets the base speed; scrolling and inertia intentionally change it.
+
+Enable responsive speed to automatically slow movement in narrow containers:
+
+```html
+<marquee-content speed="90" responsive-speed>
+  <span>Slower movement in narrow containers</span>
+</marquee-content>
+```
+
+```ts
+const marquee = document.querySelector('marquee-content');
+
+if (marquee) {
+  marquee.responsiveSpeed = true;
+  // Equivalent: marquee.update({ responsiveSpeed: true });
+}
+```
+
+When enabled, scaling uses the **component's width**, in CSS pixels:
+
+```text
+effective base speed = speed × clamp(component width / 1280, 0.55, 1)
+```
+
+At widths up to `704px` (`1280 × 0.55`), speed stays at 55% of the configured value: `speed="90"` becomes `49.5px/s`. Between `704px` and `1280px`, it increases linearly. At `1280px` and above, it uses the configured speed without scaling.
+
+Remove the attribute or set `responsive-speed="false"` to disable scaling again.
+
+## Vue 3 with Vite
 
 Tell Vue's compiler to treat the tag as a custom element:
 
@@ -191,13 +160,20 @@ export default defineConfig({
 });
 ```
 
-Then import the package in the browser entry point:
+Then render it in a component:
 
-```ts
+```vue
+<script setup lang="ts">
 import 'marquee-content';
-```
+</script>
 
----
+<template>
+  <marquee-content speed="120">
+    <span>New collection</span>
+    <span>Made to move</span>
+  </marquee-content>
+</template>
+```
 
 ## Styling
 
@@ -283,7 +259,11 @@ MarqueeContent.configureStyles({
 
 Use host styles and `::part()` for individual instances. The runtime configuration above is shared globally.
 
----
+## Supported content
+
+Use the component for decorative text and images. The rendered row consists of copies of the supplied content; those copies are hidden from assistive technology and inert. Keep links, buttons, forms, and other interactive controls outside the moving row.
+
+Apply text styles to the host and item styles through the exposed CSS parts. The component copies markup, including custom `part` tokens; event listeners, application state, and document-level class selectors are not a styling or interaction contract for the rendered copies.
 
 ## Accessibility and motion
 
@@ -292,13 +272,13 @@ Use host styles and `::part()` for individual instances. The runtime configurati
 - `prefers-reduced-motion: reduce` presents one static, wrapping set of the content so all items can be seen without animation. CSS parts continue to apply.
 - Movement pauses outside the viewport, on focus within the component, and on hover when `pause-on-hover` is enabled.
 
----
+## Server-rendered applications
 
-## Browser Support
+The module can be imported when browser globals are unavailable. Custom element registration and construction require a browser. Render the declarative tag in server-generated HTML and ensure the package also runs in the browser entry point; the animated Shadow DOM track is built there.
+
+## Browser support
 
 The component uses Custom Elements, Shadow DOM, constructable/adopted stylesheets, ResizeObserver, IntersectionObserver, and `inert`. The `scroll` mode also uses the Web Animations API. Use a browser that supports these APIs; legacy-browser fallbacks are not included.
-
----
 
 ## License
 

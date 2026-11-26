@@ -20,7 +20,6 @@ interface MarqueeContentResolvedOptions {
   speed: number;
   mode: MarqueeContentMode;
   direction: MarqueeContentDirection;
-  minGroupWidthRatio: number;
 
   responsiveSpeed: boolean;
   referenceWidth: number;
@@ -52,9 +51,8 @@ const DEFAULT_OPTIONS: MarqueeContentResolvedOptions = {
   speed: 90,
   mode: 'auto',
   direction: 'rtl',
-  minGroupWidthRatio: 1.05,
 
-  responsiveSpeed: true,
+  responsiveSpeed: false,
   referenceWidth: 1280,
   minSpeedFactor: 0.55,
   maxSpeedFactor: 1,
@@ -177,6 +175,7 @@ export class MarqueeContent extends HTMLElementBase {
 
   private readonly shadow: ShadowRoot;
   private readonly sourceSlot: HTMLSlotElement;
+  private readonly viewport: HTMLElement;
   private readonly track: HTMLElement;
 
   private options: MarqueeContentResolvedOptions = { ...DEFAULT_OPTIONS };
@@ -202,7 +201,7 @@ export class MarqueeContent extends HTMLElementBase {
   private distance = 0;
   private containerWidth = 0;
   private group: HTMLElement | null = null;
-  private layoutPhase: 'source' | 'copies' | null = null;
+  private layoutPending = false;
 
   private scrollAnimation: Animation | null = null;
   private scrollAnimationDuration = 0;
@@ -233,6 +232,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.shadow.appendChild(template.content.cloneNode(true));
 
     const sourceSlot = this.shadow.querySelector<HTMLSlotElement>('slot.marquee-content__source');
+    const viewport = this.shadow.querySelector<HTMLElement>('.marquee-content__viewport');
 
     const track = this.shadow.querySelector<HTMLElement>('.marquee-content__track');
 
@@ -244,7 +244,12 @@ export class MarqueeContent extends HTMLElementBase {
       throw new Error('[MarqueeContent] Track element was not found.');
     }
 
+    if (!viewport) {
+      throw new Error('[MarqueeContent] Viewport element was not found.');
+    }
+
     this.sourceSlot = sourceSlot;
+    this.viewport = viewport;
     this.track = track;
   }
 
@@ -301,6 +306,7 @@ export class MarqueeContent extends HTMLElementBase {
 
     this.resizeObserver = new ResizeObserver(this.handleResize);
     this.resizeObserver.observe(this);
+    this.resizeObserver.observe(this.viewport);
 
     this.intersectionObserver = new IntersectionObserver(this.handleIntersectionChange);
     this.intersectionObserver.observe(this);
@@ -436,7 +442,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.abortController?.abort();
 
     this.group = null;
-    this.layoutPhase = null;
+    this.layoutPending = false;
     this.containerWidth = 0;
     this.resizeObserver = null;
     this.mutationObserver = null;
@@ -467,9 +473,9 @@ export class MarqueeContent extends HTMLElementBase {
 
   private handleResize = (): void => {
     if (
-      this.clientWidth !== this.containerWidth ||
+      this.measureViewportWidth() !== this.containerWidth ||
       (this.group &&
-        this.layoutPhase === null &&
+        !this.layoutPending &&
         Math.abs(this.measureGroup(this.group) - this.distance) > 0.01)
     ) {
       this.scheduleRebuild();
@@ -685,11 +691,11 @@ export class MarqueeContent extends HTMLElementBase {
     }
 
     this.distance = 0;
-    this.layoutPhase = null;
+    this.layoutPending = false;
     this.updateAnimationLoopState();
     this.removeAttribute('data-marquee-content-ready');
     this.toggleAttribute('data-marquee-content-reduced-motion', this.reducedMotion);
-    this.containerWidth = this.clientWidth;
+    this.containerWidth = this.measureViewportWidth();
 
     if (this.group) {
       this.resizeObserver?.unobserve(this.group);
@@ -707,41 +713,36 @@ export class MarqueeContent extends HTMLElementBase {
 
     this.group = this.createGroup();
     this.track.replaceChildren(this.group);
-    this.layoutPhase = 'source';
+    this.layoutPending = true;
     this.completeLayout();
   }
 
   private completeLayout = (): void => {
     const group = this.group;
 
-    if (!this.mounted || !group || this.layoutPhase === null) {
+    if (!this.mounted || !group || !this.layoutPending) {
       return;
     }
 
-    // Firefox can load a cached clone asynchronously. Measure its real intrinsic size first,
-    // then finish the repeated copies without replacing the already loaded source group.
+    // Cached clones can load asynchronously. Keep the measured source period in place
+    // and reconcile coverage again when loading finishes in case its dimensions changed.
     if (this.hasPendingImages(this.track)) {
       return;
     }
 
-    if (this.layoutPhase === 'source') {
-      this.layoutPhase = 'copies';
-
-      if (!this.reducedMotion) {
-        this.expandGroupToWidth(group, this.containerWidth * this.options.minGroupWidthRatio);
-        this.track.appendChild(group.cloneNode(true));
-      }
+    if (!this.reducedMotion) {
+      this.fillTrack(group);
 
       if (this.hasPendingImages(this.track)) {
         return;
       }
     }
 
-    this.layoutPhase = null;
+    this.layoutPending = false;
     this.distance = this.measureGroup(group);
     this.resizeObserver?.observe(group);
 
-    if (this.distance <= 0) {
+    if (!Number.isFinite(this.distance) || this.distance <= 0) {
       this.track.replaceChildren();
       this.applyOptions();
       return;
@@ -753,6 +754,24 @@ export class MarqueeContent extends HTMLElementBase {
 
   private hasPendingImages(root: ParentNode): boolean {
     return Array.from(root.querySelectorAll('img')).some((image) => !image.complete);
+  }
+
+  private measureViewportWidth(): number {
+    if (this.viewport.getClientRects().length === 0) {
+      return 0;
+    }
+
+    const style = getComputedStyle(this.viewport);
+    const width = Number.parseFloat(style.width);
+
+    if (!Number.isFinite(width)) {
+      return this.viewport.clientWidth;
+    }
+
+    // Preserve fractional layout pixels and ignore ancestor transforms.
+    return style.boxSizing === 'border-box'
+      ? width - Number.parseFloat(style.borderLeftWidth) - Number.parseFloat(style.borderRightWidth)
+      : width + Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
   }
 
   private measureGroup(group: HTMLElement): number {
@@ -787,18 +806,28 @@ export class MarqueeContent extends HTMLElementBase {
     return group;
   }
 
-  private expandGroupToWidth(group: HTMLElement, targetWidth: number): void {
-    const sourceSetWidth = this.measureGroup(group);
+  private fillTrack(group: HTMLElement): void {
+    const period = this.measureGroup(group);
 
-    if (sourceSetWidth <= 0) {
+    if (!Number.isFinite(period) || period <= 0) {
       return;
     }
 
-    const repeatCount = Math.ceil(targetWidth / sourceSetWidth);
+    // One period moves offscreen while the remaining copies cover the viewport.
+    // Repeat whole groups so custom padding and borders recur at every seam.
+    const groupCount = Math.ceil(this.containerWidth / period) + 1;
 
-    for (let index = 1; index < repeatCount; index += 1) {
-      this.appendSourceNodes(group);
+    while (this.track.childElementCount > groupCount) {
+      this.track.lastElementChild?.remove();
     }
+
+    const fragment = document.createDocumentFragment();
+
+    for (let index = this.track.childElementCount; index < groupCount; index += 1) {
+      fragment.appendChild(group.cloneNode(true));
+    }
+
+    this.track.appendChild(fragment);
   }
 
   private appendSourceNodes(target: HTMLElement): void {
@@ -1087,6 +1116,14 @@ export class MarqueeContent extends HTMLElementBase {
       return this.scrollProgress;
     }
 
+    // currentTime can be rounded by the browser. Computed progress reflects the
+    // rendered phase and already accounts for a reversed effect.
+    const progress = animation.effect?.getComputedTiming().progress;
+
+    if (progress != null) {
+      return progress % 1;
+    }
+
     const currentTime = animation.currentTime;
 
     if (typeof currentTime !== 'number') {
@@ -1095,9 +1132,11 @@ export class MarqueeContent extends HTMLElementBase {
 
     const fraction = (currentTime / this.scrollAnimationDuration) % 1;
 
-    const progress = fraction < 0 ? fraction + 1 : fraction;
+    const normalized = fraction < 0 ? fraction + 1 : fraction;
 
-    return animation.effect?.getTiming().direction === 'reverse' ? (1 - progress) % 1 : progress;
+    return animation.effect?.getTiming().direction === 'reverse'
+      ? (1 - normalized) % 1
+      : normalized;
   }
 
   private updateScrollPlaybackRate(now: number, immediate: boolean): boolean {
