@@ -108,6 +108,8 @@ To react to page scrolling:
 
 `scroll` listens to the window's vertical scroll position. Its direction follows scrolling, and its speed boost decays after scrolling stops. A custom scroll container is not currently configurable.
 
+While speed is changing, `scroll` updates the track's transform on animation frames. Once speed settles, it returns to the Web Animations API and stops the JavaScript frame loop.
+
 ## Responsive speed
 
 Responsive speed is disabled by default. In `auto` mode, `speed="90"` gives `90px/s` at any container width. In `scroll` mode, it sets the base speed; scrolling and inertia intentionally change it.
@@ -209,6 +211,8 @@ Rendered items live in Shadow DOM. Use the exposed parts to style them:
 | `group` | Each repeated group of content. |
 | `viewport` | The container that clips the moving row. |
 | `track` | The animated carrier of the groups. |
+
+The default stylesheet uses `will-change: transform` on repeated groups as a [Safari loop-flicker workaround](https://bugs.webkit.org/show_bug.cgi?id=269284); reduced motion clears this hint. Each group therefore creates a stacking context and a containing block for positioned descendants. Individual items do not receive this hint.
 
 A source element's existing `part` tokens are preserved alongside `item`, so individual items can have their own styles:
 

@@ -669,16 +669,29 @@ test('scroll events change direction and boost speed before settling without a f
   `,
   });
   const track = host.locator('[part~="track"]');
+  const movement = (): Promise<number> =>
+    track.evaluate(async (element) => {
+      const root = element.getRootNode();
+      if (!(root instanceof ShadowRoot)) throw new Error('Marquee shadow root is missing');
+      const distance = Number.parseFloat(
+        (root.host as HTMLElement).style.getPropertyValue('--marquee-content-distance'),
+      );
+      let previous = new DOMMatrixReadOnly(getComputedStyle(element).transform).m41;
+      let displacement = 0;
+      const startedAt = performance.now();
+      while (performance.now() - startedAt < 150) {
+        await new Promise(requestAnimationFrame);
+        const current = new DOMMatrixReadOnly(getComputedStyle(element).transform).m41;
+        const delta = current - previous;
+        displacement += delta - Math.round(delta / distance) * distance;
+        previous = current;
+      }
+      return displacement / ((performance.now() - startedAt) / 1000);
+    });
   await page.evaluate(() => window.scrollTo(0, 500));
-  await expect
-    .poll(() => track.evaluate((element) => element.getAnimations()[0]?.playbackRate))
-    .toBeGreaterThan(1.1);
+  await expect.poll(movement).toBeLessThan(-100);
   await page.evaluate(() => window.scrollTo(0, 100));
-  await expect
-    .poll(() =>
-      track.evaluate((element) => element.getAnimations()[0]?.effect?.getTiming().direction),
-    )
-    .toBe('reverse');
+  await expect.poll(movement).toBeGreaterThan(100);
   await expect
     .poll(
       async () => {
@@ -696,11 +709,7 @@ test('scroll events change direction and boost speed before settling without a f
     .poll(() => track.evaluate((element) => element.getAnimations()[0]?.playState))
     .toBe('running');
   await page.evaluate(() => window.scrollTo(0, 500));
-  await expect
-    .poll(() =>
-      track.evaluate((element) => element.getAnimations()[0]?.effect?.getTiming().direction),
-    )
-    .toBe('normal');
+  await expect.poll(movement).toBeLessThan(-100);
 });
 
 test('pauses outside the viewport and resumes when visible again', async ({ page }) => {
