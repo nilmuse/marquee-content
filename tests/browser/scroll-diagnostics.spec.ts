@@ -125,7 +125,7 @@ test('recording preserves scroll decisions and freezes an exportable failure tra
   expect(result.unchanged).toBe(true);
   expect(result.frozen.recording).toBe(false);
   expect(result.frozen.metadata.touchInput).toBe(true);
-  expect(result.frozen.metadata.recorderVersion).toBe(2);
+  expect(result.frozen.metadata.recorderVersion).toBe(3);
   expect(result.frozen.metadata.componentSources).toContain('http://127.0.0.1:4173/dist/index.js');
   expect(result.frozen.records.some((entry) => entry.viewport.overscroll === -36)).toBe(true);
   expect(
