@@ -108,7 +108,7 @@ On devices with a fine pointer, `scroll` listens to the window's vertical scroll
 
 On touch devices matching `(hover: none) and (pointer: coarse)`, `scroll` follows the scrolling direction at the configured constant speed, without acceleration or decay. Movement continues in the last direction after scrolling stops. The `direction` option determines the base direction, as on desktop. Direction changes preserve the current position and use a native CSS animation without a JavaScript frame loop. The component responds to changes in the input capabilities.
 
-During touch scrolling, direction changes require page movement matching the vertical finger gesture. This filters elastic rebound at the page edges, including movement back inside the scroll range. Moving a finger or scrolling a nested container alone does not change the marquee direction.
+Elastic rebound after scrolling beyond a page edge does not reverse the marquee. A deliberate reverse gesture can change direction during rebound. Moving a finger or scrolling a nested container without page movement does not change the marquee direction.
 
 While speed is changing on a fine-pointer device, `scroll` updates the track's transform on animation frames. Once speed settles, it returns to the Web Animations API and stops the JavaScript frame loop.
 

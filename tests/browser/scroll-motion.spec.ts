@@ -420,6 +420,120 @@ for (const edge of ['top', 'bottom'] as const) {
       });
     }
   });
+
+  test(`touch reaching the ${edge} boundary without overscroll can reverse before touchmove`, async ({
+    page,
+  }) => {
+    await emulateTouchInput(page, true);
+    await emulateScrollY(page);
+    const host = await mountScroll(page, 'speed="80"');
+    const directions = await host.evaluate((element, edge) => {
+      const track = element.shadowRoot?.querySelector('[part~="track"]');
+      if (!track) throw new Error('Moving track is missing');
+      const scroller = document.scrollingElement ?? document.documentElement;
+      const edgeY = edge === 'top' ? 0 : scroller.scrollHeight - scroller.clientHeight;
+      const towardEdge = edge === 'top' ? -1 : 1;
+      window.setScrollY(edgeY - towardEdge * 100);
+      window.dispatchTouchInput('touchstart', 200);
+      window.dispatchTouchInput('touchmove', 200 - towardEdge * 40);
+      window.setScrollY(edgeY);
+      const atEdge = getComputedStyle(track).animationDirection;
+      window.dispatchTouchInput('touchend', 200 - towardEdge * 40);
+      window.dispatchTouchInput('touchstart', 200);
+      window.setScrollY(edgeY - towardEdge * 20);
+      return [atEdge, getComputedStyle(track).animationDirection];
+    }, edge);
+    expect(directions).toEqual(edge === 'top' ? ['reverse', 'normal'] : ['normal', 'reverse']);
+  });
+
+  test(`touch reversal after ${edge} recoil replays the page delta when touchmove arrives later`, async ({
+    page,
+  }) => {
+    await emulateTouchInput(page, true);
+    await emulateScrollY(page);
+    const host = await mountScroll(page, 'speed="80"');
+    const directions = await host.evaluate((element, edge) => {
+      const track = element.shadowRoot?.querySelector('[part~="track"]');
+      if (!track) throw new Error('Moving track is missing');
+      const scroller = document.scrollingElement ?? document.documentElement;
+      const edgeY = edge === 'top' ? 0 : scroller.scrollHeight - scroller.clientHeight;
+      const towardEdge = edge === 'top' ? -1 : 1;
+      window.setScrollY(edgeY - towardEdge * 100);
+      window.dispatchTouchInput('touchstart', 200);
+      window.dispatchTouchInput('touchmove', 200 - towardEdge * 40);
+      window.setScrollY(edgeY);
+      window.dispatchTouchInput('touchend', 200 - towardEdge * 40);
+      window.setScrollY(edgeY + towardEdge * 36);
+      window.setScrollY(edgeY - towardEdge * 8);
+      const afterRecoil = getComputedStyle(track).animationDirection;
+      window.dispatchTouchInput('touchstart', 200);
+      window.setScrollY(edgeY - towardEdge * 24);
+      const beforeTouchMove = getComputedStyle(track).animationDirection;
+      window.dispatchTouchInput('touchmove', 200 + towardEdge * 40);
+      return [afterRecoil, beforeTouchMove, getComputedStyle(track).animationDirection];
+    }, edge);
+    expect(directions).toEqual(
+      edge === 'top' ? ['reverse', 'reverse', 'normal'] : ['normal', 'normal', 'reverse'],
+    );
+  });
+
+  test(`a fresh inward touch gesture immediately after ${edge} recoil reverses normally`, async ({
+    page,
+  }) => {
+    await emulateTouchInput(page, true);
+    await emulateScrollY(page);
+    const host = await mountScroll(page, 'speed="80"');
+    const directions = await host.evaluate((element, edge) => {
+      const track = element.shadowRoot?.querySelector('[part~="track"]');
+      if (!track) throw new Error('Moving track is missing');
+      const scroller = document.scrollingElement ?? document.documentElement;
+      const edgeY = edge === 'top' ? 0 : scroller.scrollHeight - scroller.clientHeight;
+      const towardEdge = edge === 'top' ? -1 : 1;
+      window.setScrollY(edgeY - towardEdge * 100);
+      window.dispatchTouchInput('touchstart', 200);
+      window.dispatchTouchInput('touchmove', 200 - towardEdge * 40);
+      window.setScrollY(edgeY);
+      window.dispatchTouchInput('touchend', 200 - towardEdge * 40);
+      window.setScrollY(edgeY + towardEdge * 36);
+      window.setScrollY(edgeY);
+      const afterRecoil = getComputedStyle(track).animationDirection;
+      window.dispatchTouchInput('touchstart', 200);
+      window.dispatchTouchInput('touchmove', 200 + towardEdge * 40);
+      const beforePageScroll = getComputedStyle(track).animationDirection;
+      window.setScrollY(edgeY - towardEdge * 20);
+      return [afterRecoil, beforePageScroll, getComputedStyle(track).animationDirection];
+    }, edge);
+    expect(directions).toEqual(
+      edge === 'top' ? ['reverse', 'reverse', 'normal'] : ['normal', 'normal', 'reverse'],
+    );
+  });
+
+  test(`an active touch gesture can reverse inward after ${edge} overscroll`, async ({ page }) => {
+    await emulateTouchInput(page, true);
+    await emulateScrollY(page);
+    const host = await mountScroll(page, 'speed="80"');
+    const directions = await host.evaluate((element, edge) => {
+      const track = element.shadowRoot?.querySelector('[part~="track"]');
+      if (!track) throw new Error('Moving track is missing');
+      const scroller = document.scrollingElement ?? document.documentElement;
+      const edgeY = edge === 'top' ? 0 : scroller.scrollHeight - scroller.clientHeight;
+      const towardEdge = edge === 'top' ? -1 : 1;
+      window.setScrollY(edgeY - towardEdge * 100);
+      window.dispatchTouchInput('touchstart', 200);
+      window.dispatchTouchInput('touchmove', 200 - towardEdge * 40);
+      window.setScrollY(edgeY);
+      window.setScrollY(edgeY + towardEdge * 36);
+      window.setScrollY(edgeY);
+      const afterRecoil = getComputedStyle(track).animationDirection;
+      window.dispatchTouchInput('touchmove', 200);
+      const beforePageScroll = getComputedStyle(track).animationDirection;
+      window.setScrollY(edgeY - towardEdge * 20);
+      return [afterRecoil, beforePageScroll, getComputedStyle(track).animationDirection];
+    }, edge);
+    expect(directions).toEqual(
+      edge === 'top' ? ['reverse', 'reverse', 'normal'] : ['normal', 'normal', 'reverse'],
+    );
+  });
 }
 
 test('touch recoil preserves direction when the bottom scroll boundary moves', async ({ page }) => {
@@ -447,7 +561,48 @@ test('touch recoil preserves direction when the bottom scroll boundary moves', a
   expect(Math.abs((await movement(host)) + 80)).toBeLessThan(20);
 });
 
-test('diagonal touch direction changes require an agreeing page delta and survive gesture end', async ({
+test('interior page scrolling reverses immediately before the first touchmove', async ({
+  page,
+}) => {
+  await emulateTouchInput(page, true);
+  await emulateScrollY(page);
+  const host = await mountScroll(page, 'speed="80"');
+  const directions = await host.evaluate((element) => {
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    window.setScrollY(500);
+    window.dispatchTouchInput('touchstart', 200);
+    window.setScrollY(480);
+    const reversed = getComputedStyle(track).animationDirection;
+    window.setScrollY(520);
+    return [reversed, getComputedStyle(track).animationDirection];
+  });
+  expect(directions).toEqual(['reverse', 'normal']);
+});
+
+test('interior page scrolling after touchend ignores the previous finger direction', async ({
+  page,
+}) => {
+  await emulateTouchInput(page, true);
+  await emulateScrollY(page);
+  const host = await mountScroll(page, 'speed="80"');
+  const directions = await host.evaluate((element) => {
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    window.setScrollY(500);
+    window.dispatchTouchInput('touchstart', 200);
+    window.dispatchTouchInput('touchmove', 160);
+    window.setScrollY(600);
+    window.dispatchTouchInput('touchend', 160);
+    return [580, 620, 600].map((value) => {
+      window.setScrollY(value);
+      return getComputedStyle(track).animationDirection;
+    });
+  });
+  expect(directions).toEqual(['reverse', 'normal', 'reverse']);
+});
+
+test('interior page direction stays responsive when diagonal touch events lag or the gesture ends', async ({
   page,
 }) => {
   await emulateTouchInput(page, true);
@@ -484,9 +639,9 @@ test('diagonal touch direction changes require an agreeing page delta and surviv
     'normal',
     'normal',
     'reverse',
+    'normal',
+    'normal',
     'reverse',
-    'normal',
-    'normal',
     'reverse',
   ]);
   expect(result.sameAnimation).toBe(true);
@@ -509,32 +664,40 @@ test('touch idle fallback waits for page scrolling to stop and keeps active gest
       window.setScrollY(value);
       directions.push(getComputedStyle(track).animationDirection);
     };
-    window.setScrollY(500);
+    const scroller = document.scrollingElement ?? document.documentElement;
+    const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    window.setScrollY(maxScroll - 100);
     window.dispatchTouchInput('touchstart', 200);
     window.dispatchTouchInput('touchmove', 160);
-    window.setScrollY(600);
+    window.setScrollY(maxScroll);
+    window.setScrollY(maxScroll + 36);
     await wait(300);
-    scroll(580);
+    scroll(maxScroll - 20);
     window.dispatchTouchInput('touchend', 160);
-    for (const value of [560, 540, 520]) {
+    for (const offset of [40, 60, 80]) {
       await wait(150);
-      scroll(value);
+      scroll(maxScroll - offset);
     }
     await wait(300);
-    scroll(500);
+    scroll(maxScroll - 100);
     window.dispatchTouchInput('touchstart', 200);
-    scroll(520);
-    await wait(300);
-    scroll(540);
     window.dispatchTouchInput('touchmove', 160);
-    scroll(560);
+    scroll(maxScroll);
+    window.setScrollY(maxScroll + 36);
+    window.dispatchTouchInput('touchend', 160);
+    await wait(150);
+    window.dispatchTouchInput('touchstart', 200);
+    await wait(300);
+    scroll(maxScroll - 20);
+    window.dispatchTouchInput('touchmove', 160);
+    scroll(maxScroll - 40);
     window.dispatchTouchInput('touchcancel', 160);
-    for (const value of [540, 520]) {
+    for (const offset of [60, 80]) {
       await wait(150);
-      scroll(value);
+      scroll(maxScroll - offset);
     }
     await wait(300);
-    scroll(500);
+    scroll(maxScroll - 100);
     return directions;
   });
   expect(directions).toEqual([
@@ -543,8 +706,8 @@ test('touch idle fallback waits for page scrolling to stop and keeps active gest
     'normal',
     'normal',
     'reverse',
-    'reverse',
-    'reverse',
+    'normal',
+    'normal',
     'normal',
     'normal',
     'normal',
@@ -585,7 +748,7 @@ test('touch movement and nested scrolling cannot reverse a stationary page', asy
   expect(directions).toEqual(['normal', 'normal', 'normal', 'normal', 'reverse']);
 });
 
-test('mode and input changes clear the previous touch gesture direction', async ({ page }) => {
+test('mode and input changes clear touch edge recoil suppression', async ({ page }) => {
   await emulateTouchInput(page, true);
   await emulateScrollY(page);
   const host = await mountScroll(page, 'speed="80"');
@@ -594,10 +757,13 @@ test('mode and input changes clear the previous touch gesture direction', async 
       const track = element.shadowRoot?.querySelector('[part~="track"]');
       if (!track) throw new Error('Moving track is missing');
       window.dispatchEvent(new Event('scrollend'));
-      window.setScrollY(400);
+      const scroller = document.scrollingElement ?? document.documentElement;
+      const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+      window.setScrollY(maxScroll - 100);
       window.dispatchTouchInput('touchstart', 200);
       window.dispatchTouchInput('touchmove', 160);
-      window.setScrollY(500);
+      window.setScrollY(maxScroll);
+      window.setScrollY(maxScroll + 36);
       window.dispatchTouchInput('touchend', 160);
       if (reset === 'mode') {
         (element as MarqueeContent).mode = 'auto';
@@ -610,7 +776,7 @@ test('mode and input changes clear the previous touch gesture direction', async 
         element.remove();
         parent?.append(element);
       }
-      window.setScrollY(450);
+      window.setScrollY(maxScroll - 50);
       return getComputedStyle(track).animationDirection;
     }, reset);
     expect(direction, reset).toBe('reverse');
