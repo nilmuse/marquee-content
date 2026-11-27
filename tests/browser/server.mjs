@@ -4,6 +4,11 @@ import { createServer } from 'node:http';
 const files = new Map([
   ['/', new URL('./fixture.html', import.meta.url)],
   ['/dist/index.js', new URL('../../dist/index.js', import.meta.url)],
+  ['/diagnostics/', new URL('../../demo/scroll-diagnostics/index.html', import.meta.url)],
+  [
+    '/diagnostics/recorder.js',
+    new URL('../../demo/scroll-diagnostics/recorder.js', import.meta.url),
+  ],
 ]);
 
 const server = createServer(async (request, response) => {
