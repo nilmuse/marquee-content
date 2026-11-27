@@ -89,6 +89,7 @@ const MARQUEE_CONTENT_CSS_PROPS = [
 ] as const;
 
 const SCROLL_TIME_SCALE_SMOOTHING_SECONDS = 0.12;
+const TOUCH_INPUT_QUERY = '(hover: none) and (pointer: coarse)';
 
 // Server imports do not need a DOM; element construction still requires a browser.
 const HTMLElementBase = (globalThis.HTMLElement ?? class {}) as typeof HTMLElement;
@@ -186,6 +187,7 @@ export class MarqueeContent extends HTMLElementBase {
   private intersectionObserver: IntersectionObserver | null = null;
   private abortController: AbortController | null = null;
   private reducedMotionMediaQuery: MediaQueryList | null = null;
+  private touchInputMediaQuery: MediaQueryList | null = null;
 
   private animationFrameId: number | null = null;
   private rebuildFrameId: number | null = null;
@@ -196,6 +198,7 @@ export class MarqueeContent extends HTMLElementBase {
   private isFocused = false;
   private isInViewport = true;
   private reducedMotion = false;
+  private touchInput = false;
   private isListeningToScroll = false;
 
   private distance = 0;
@@ -314,6 +317,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.intersectionObserver.observe(this);
 
     this.setupReducedMotionWatcher();
+    this.setupTouchInputWatcher();
     this.watchSourceNodes();
     this.updateScrollListener();
     this.rebuild();
@@ -440,6 +444,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.intersectionObserver?.disconnect();
 
     this.removeReducedMotionWatcher();
+    this.removeTouchInputWatcher();
 
     this.abortController?.abort();
 
@@ -534,7 +539,7 @@ export class MarqueeContent extends HTMLElementBase {
 
     if (this.reducedMotion) {
       this.track.style.transform = 'none';
-    } else if (this.options.mode === 'scroll') {
+    } else if (this.getEffectiveMode() === 'scroll') {
       this.track.style.transform = '';
     }
 
@@ -562,7 +567,16 @@ export class MarqueeContent extends HTMLElementBase {
 
     const velocity = deltaY / deltaTime;
 
-    this.scrollDirectionFactor = velocity >= 0 ? 1 : -1;
+    const direction = velocity >= 0 ? 1 : -1;
+    const directionChanged = direction !== this.scrollDirectionFactor;
+    this.scrollDirectionFactor = direction;
+
+    if (this.touchInput) {
+      if (directionChanged) {
+        this.applyOptions();
+      }
+      return;
+    }
 
     const extraSpeed = this.clamp(
       velocity / this.options.scrollVelocityFactor,
@@ -581,7 +595,7 @@ export class MarqueeContent extends HTMLElementBase {
   };
 
   private onScrollBoostChanged(): void {
-    if (!this.mounted || this.options.mode !== 'scroll' || this.reducedMotion) {
+    if (!this.mounted || this.getEffectiveMode() !== 'scroll' || this.reducedMotion) {
       return;
     }
 
@@ -664,12 +678,14 @@ export class MarqueeContent extends HTMLElementBase {
 
     this.updateAnimationLoopState();
 
-    if (progress != null && this.options.mode === 'auto' && !this.reducedMotion) {
+    if (progress != null && this.getEffectiveMode() === 'auto' && !this.reducedMotion) {
       const animation = this.getAutoAnimation();
 
       if (animation) {
         animation.currentTime =
-          duration * 1000 * (this.options.direction === 'ltr' ? 1 - progress : progress);
+          duration *
+          1000 *
+          (this.track.style.animationDirection === 'reverse' ? 1 - progress : progress);
       }
     }
   }
@@ -927,6 +943,44 @@ export class MarqueeContent extends HTMLElementBase {
     this.reducedMotionMediaQuery = null;
   }
 
+  private getEffectiveMode(): MarqueeContentMode {
+    return this.touchInput ? 'auto' : this.options.mode;
+  }
+
+  private setupTouchInputWatcher(): void {
+    if (!('matchMedia' in window)) {
+      return;
+    }
+
+    this.touchInputMediaQuery = window.matchMedia(TOUCH_INPUT_QUERY);
+    this.touchInput = this.touchInputMediaQuery.matches;
+    this.touchInputMediaQuery.addEventListener('change', this.handleTouchInputChange, {
+      signal: this.abortController?.signal,
+    });
+  }
+
+  private removeTouchInputWatcher(): void {
+    this.touchInputMediaQuery?.removeEventListener('change', this.handleTouchInputChange);
+    this.touchInputMediaQuery = null;
+    this.touchInput = false;
+  }
+
+  private handleTouchInputChange = (event: MediaQueryListEvent): void => {
+    if (!this.mounted || event.matches === this.touchInput) {
+      return;
+    }
+
+    this.touchInput = event.matches;
+    this.stopAnimationLoop();
+    this.cancelScrollAnimation();
+    this.scrollMotionActive = false;
+    this.scrollBoostStartValue = 0;
+    this.scrollBoostStartedAt = 0;
+    this.currentTimeScale = this.getDirectionFactor() * this.scrollDirectionFactor;
+    this.updateScrollListener();
+    this.applyOptions();
+  };
+
   private updateAnimationLoopState(): void {
     if (!this.mounted || this.distance <= 0 || this.reducedMotion) {
       this.stopAnimationLoop();
@@ -935,7 +989,7 @@ export class MarqueeContent extends HTMLElementBase {
 
       // A rebuild temporarily has no distance. Keep its phase and speed until layout
       // completes, while mode changes and reduced motion leave the active path.
-      if (!this.mounted || this.options.mode !== 'scroll' || this.reducedMotion) {
+      if (!this.mounted || this.getEffectiveMode() !== 'scroll' || this.reducedMotion) {
         this.scrollMotionActive = false;
       }
 
@@ -943,7 +997,7 @@ export class MarqueeContent extends HTMLElementBase {
       return;
     }
 
-    if (this.options.mode === 'scroll') {
+    if (this.getEffectiveMode() === 'scroll') {
       this.stopCssAnimation();
 
       if (this.scrollMotionActive) {
@@ -1024,7 +1078,10 @@ export class MarqueeContent extends HTMLElementBase {
   }
 
   private startCssAnimation(): void {
-    const animationDirection = this.options.direction === 'ltr' ? 'reverse' : 'normal';
+    const scrollDirection =
+      this.touchInput && this.options.mode === 'scroll' ? this.scrollDirectionFactor : 1;
+    const animationDirection =
+      this.getDirectionFactor() * scrollDirection < 0 ? 'reverse' : 'normal';
 
     this.track.style.transform = '';
 
@@ -1054,7 +1111,7 @@ export class MarqueeContent extends HTMLElementBase {
 
     if (
       !this.mounted ||
-      this.options.mode !== 'scroll' ||
+      this.getEffectiveMode() !== 'scroll' ||
       this.distance <= 0 ||
       this.reducedMotion ||
       !this.canAnimate() ||
@@ -1209,7 +1266,7 @@ export class MarqueeContent extends HTMLElementBase {
   private getCurrentTimeScale(now: number): number {
     const directionFactor = this.getDirectionFactor();
 
-    if (this.options.mode !== 'scroll') {
+    if (this.getEffectiveMode() !== 'scroll') {
       return directionFactor;
     }
 

@@ -4,9 +4,44 @@ import type { MarqueeContent } from '../../src/marquee-content';
 declare global {
   interface Window {
     scrollAnimationCalls: { play: number; rate: number };
+    setTouchInput: (matches: boolean) => void;
   }
 }
 
+async function emulateTouchInput(page: Page, initialMatches: boolean): Promise<void> {
+  await page.addInitScript((initial) => {
+    const query = '(hover: none) and (pointer: coarse)';
+    const matchMedia = window.matchMedia.bind(window);
+    const media = matchMedia(query);
+    let matches = initial;
+    Object.defineProperty(media, 'matches', { get: () => matches });
+    window.matchMedia = (value) => (value === query ? media : matchMedia(value));
+    window.setTouchInput = (value) => {
+      matches = value;
+      media.dispatchEvent(new MediaQueryListEvent('change', { matches, media: query }));
+    };
+  }, initialMatches);
+}
+
+async function scrollRuntime(host: Locator) {
+  return host.evaluate((element) => {
+    const runtime = element as unknown as {
+      animationFrameId: number | null;
+      isListeningToScroll: boolean;
+      scrollBoostStartValue: number;
+    };
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    return {
+      listening: runtime.isListeningToScroll,
+      activeFrame: runtime.animationFrameId !== null,
+      boost: runtime.scrollBoostStartValue,
+      cssAnimation: getComputedStyle(track).animationName,
+      nativeRunning: track.getAnimations().some((animation) => animation.playState === 'running'),
+      mode: (element as MarqueeContent).mode,
+    };
+  });
+}
 async function mountScroll(page: Page, attributes = ''): Promise<Locator> {
   await page.goto('/');
   await page.waitForFunction(() => Boolean(customElements.get('marquee-content')));
@@ -217,4 +252,120 @@ test('active scroll motion survives focus, refresh, mode changes and reduced mot
   await expect.poll(async () => Math.abs(await movement(host))).toBeLessThan(0.1);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await expect.poll(() => movement(host)).toBeLessThan(-60);
+});
+
+test('touch scroll mode follows direction at constant speed without a boost loop', async ({
+  page,
+}) => {
+  await emulateTouchInput(page, true);
+  const host = await mountScroll(page, 'speed="80"');
+  for (const direction of ['rtl', 'ltr'] as const) {
+    await host.evaluate((element, value) => element.setAttribute('direction', value), direction);
+    await page.evaluate(async () => {
+      window.scrollTo(0, 0);
+      await new Promise(requestAnimationFrame);
+    });
+    const baseSpeed = direction === 'rtl' ? -80 : 80;
+    for (const [scrollY, scrollDirection] of [
+      [500, 1],
+      [0, -1],
+      [700, 1],
+    ] as const) {
+      await page.evaluate(async (value) => {
+        window.scrollTo(0, value);
+        await new Promise(requestAnimationFrame);
+      }, scrollY);
+      expect(Math.abs((await movement(host)) - baseSpeed * scrollDirection)).toBeLessThan(20);
+      expect(await scrollRuntime(host)).toEqual({
+        listening: true,
+        activeFrame: false,
+        boost: 0,
+        cssAnimation: 'marquee-content-auto',
+        nativeRunning: true,
+        mode: 'scroll',
+      });
+      await expect(host).toHaveAttribute('mode', 'scroll');
+      await expect(host).toHaveAttribute('data-marquee-content-mode', 'scroll');
+    }
+  }
+});
+
+test('changing input capability clears boost and restores desktop scroll behavior', async ({
+  page,
+}) => {
+  await emulateTouchInput(page, false);
+  const host = await mountScroll(page, 'speed="80"');
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await expect.poll(() => movement(host)).toBeLessThan(-120);
+  expect(await scrollRuntime(host)).toMatchObject({ listening: true, activeFrame: true });
+
+  await page.evaluate(() => window.setTouchInput(true));
+  await expect
+    .poll(() => scrollRuntime(host))
+    .toEqual({
+      listening: true,
+      activeFrame: false,
+      boost: 0,
+      cssAnimation: 'marquee-content-auto',
+      nativeRunning: true,
+      mode: 'scroll',
+    });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(Math.abs((await movement(host)) - 80)).toBeLessThan(20);
+
+  await page.evaluate(() => window.setTouchInput(false));
+  await expect
+    .poll(() => scrollRuntime(host))
+    .toMatchObject({
+      listening: true,
+      activeFrame: false,
+      boost: 0,
+      nativeRunning: true,
+      mode: 'scroll',
+    });
+  expect(Math.abs((await movement(host)) - 80)).toBeLessThan(20);
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await expect.poll(() => movement(host)).toBeLessThan(-120);
+  expect(await scrollRuntime(host)).toMatchObject({ listening: true, activeFrame: true });
+  await expect(host).toHaveAttribute('mode', 'scroll');
+});
+
+test('touch reversals preserve phase and retain native motion after scrolling stops', async ({
+  page,
+}) => {
+  await emulateTouchInput(page, true);
+  const host = await mountScroll(page, 'speed="80"');
+  await page.evaluate(() => window.scrollTo(0, 500));
+  await expect.poll(() => movement(host)).toBeLessThan(-60);
+  const reversal = await host.evaluate(async (element) => {
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    const animation = track.getAnimations()[0];
+    const distance = Number.parseFloat(
+      element.style.getPropertyValue('--marquee-content-distance'),
+    );
+    const before = new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+    const started = performance.now();
+    const scrolled = new Promise<void>((resolve) =>
+      window.addEventListener('scroll', () => resolve(), { once: true }),
+    );
+    window.scrollTo(0, 0);
+    await scrolled;
+    const delta = new DOMMatrixReadOnly(getComputedStyle(track).transform).m41 - before;
+    return {
+      sameAnimation: animation === track.getAnimations()[0],
+      distance: Math.abs(delta - Math.round(delta / distance) * distance),
+      maximumTravel: (80 * (performance.now() - started)) / 1000 + 2,
+    };
+  });
+  expect(reversal.sameAnimation).toBe(true);
+  expect(reversal.distance).toBeLessThan(reversal.maximumTravel);
+  expect(Math.abs((await movement(host)) - 80)).toBeLessThan(20);
+  await page.waitForTimeout(2700);
+  expect(Math.abs((await movement(host)) - 80)).toBeLessThan(20);
+  expect(await scrollRuntime(host)).toMatchObject({
+    activeFrame: false,
+    boost: 0,
+    nativeRunning: true,
+  });
 });

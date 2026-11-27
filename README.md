@@ -106,13 +106,15 @@ To react to page scrolling:
 </marquee-content>
 ```
 
-`scroll` listens to the window's vertical scroll position. Its direction follows scrolling, and its speed boost decays after scrolling stops. A custom scroll container is not currently configurable.
+On devices with a fine pointer, `scroll` listens to the window's vertical scroll position. Its direction follows scrolling, and its speed boost decays after scrolling stops. A custom scroll container is not currently configurable.
 
-While speed is changing, `scroll` updates the track's transform on animation frames. Once speed settles, it returns to the Web Animations API and stops the JavaScript frame loop.
+On touch devices matching `(hover: none) and (pointer: coarse)`, `scroll` follows the scrolling direction at the configured constant speed, without acceleration or decay. Movement continues in the last direction after scrolling stops. The `direction` option determines the base direction, as on desktop. Direction changes preserve the current position and use a native CSS animation without a JavaScript frame loop. The component responds to changes in the input capabilities.
+
+While speed is changing on a fine-pointer device, `scroll` updates the track's transform on animation frames. Once speed settles, it returns to the Web Animations API and stops the JavaScript frame loop.
 
 ## Responsive speed
 
-Responsive speed is disabled by default. In `auto` mode, `speed="90"` gives `90px/s` at any container width. In `scroll` mode, it sets the base speed; scrolling and inertia intentionally change it.
+Responsive speed is disabled by default. In `auto` mode, `speed="90"` gives `90px/s` at any container width. In `scroll` mode, it sets the base speed; on fine-pointer devices, scrolling and inertia intentionally change it.
 
 Enable responsive speed to automatically slow movement in narrow containers:
 
@@ -283,6 +285,8 @@ The module can be imported when browser globals are unavailable. Custom element 
 ## Browser support
 
 The component uses Custom Elements, Shadow DOM, constructable/adopted stylesheets, ResizeObserver, IntersectionObserver, and `inert`. The `scroll` mode also uses the Web Animations API. Use a browser that supports these APIs; legacy-browser fallbacks are not included.
+
+Safari can [throttle animation-frame callbacks in cross-origin iframes until user interaction](https://bugs.webkit.org/show_bug.cgi?id=213344); a swipe may not release the limit. [CodePen Full Page uses an iframe](https://blog.codepen.io/documentation/full-page-view/), so compare `scroll` performance in Debug View or a standalone page with `<meta name="viewport" content="width=device-width, initial-scale=1">`.
 
 ## License
 
