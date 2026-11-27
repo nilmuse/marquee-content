@@ -90,6 +90,7 @@ const MARQUEE_CONTENT_CSS_PROPS = [
 
 const SCROLL_TIME_SCALE_SMOOTHING_SECONDS = 0.12;
 const TOUCH_INPUT_QUERY = '(hover: none) and (pointer: coarse)';
+const TOUCH_SCROLL_EDGE_THRESHOLD = 1;
 
 // Server imports do not need a DOM; element construction still requires a browser.
 const HTMLElementBase = (globalThis.HTMLElement ?? class {}) as typeof HTMLElement;
@@ -1407,7 +1408,22 @@ export class MarqueeContent extends HTMLElementBase {
   }
 
   private getScrollY(): number {
-    return window.scrollY || window.pageYOffset || 0;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    if (!this.touchInput) {
+      return scrollY;
+    }
+
+    const scroller = document.scrollingElement ?? document.documentElement;
+    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+
+    // Ignore rubber-band movement and subpixel jitter at either page edge.
+    if (scrollY <= TOUCH_SCROLL_EDGE_THRESHOLD) {
+      return 0;
+    }
+    if (scrollY >= maxScroll - TOUCH_SCROLL_EDGE_THRESHOLD) {
+      return maxScroll;
+    }
+    return scrollY;
   }
 
   private clamp(value: number, min: number, max: number): number {
