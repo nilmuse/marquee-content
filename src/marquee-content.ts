@@ -13,18 +13,12 @@ export interface MarqueeContentOptions {
   mode?: MarqueeContentMode | null;
   direction?: MarqueeContentDirection | null;
   pauseOnHover?: boolean | string | null;
-  responsiveSpeed?: boolean | string | null;
 }
 
 interface MarqueeContentResolvedOptions {
   speed: number;
   mode: MarqueeContentMode;
   direction: MarqueeContentDirection;
-
-  responsiveSpeed: boolean;
-  referenceWidth: number;
-  minSpeedFactor: number;
-  maxSpeedFactor: number;
 
   pauseOnHover: boolean;
   pauseWhenOutOfView: boolean;
@@ -52,11 +46,6 @@ const DEFAULT_OPTIONS: MarqueeContentResolvedOptions = {
   mode: 'auto',
   direction: 'rtl',
 
-  responsiveSpeed: false,
-  referenceWidth: 1280,
-  minSpeedFactor: 0.55,
-  maxSpeedFactor: 1,
-
   pauseOnHover: false,
   pauseWhenOutOfView: true,
   recalculateAfterFontsReady: true,
@@ -67,20 +56,13 @@ const DEFAULT_OPTIONS: MarqueeContentResolvedOptions = {
   scrollInertiaDuration: 2500,
 };
 
-const OBSERVED_ATTRIBUTES = [
-  'speed',
-  'mode',
-  'direction',
-  'pause-on-hover',
-  'responsive-speed',
-] as const;
+const OBSERVED_ATTRIBUTES = ['speed', 'mode', 'direction', 'pause-on-hover'] as const;
 
 const OPTION_ATTRIBUTE_MAP: Record<keyof MarqueeContentOptions, string> = {
   speed: 'speed',
   mode: 'mode',
   direction: 'direction',
   pauseOnHover: 'pause-on-hover',
-  responsiveSpeed: 'responsive-speed',
 };
 
 const MARQUEE_CONTENT_CSS_PROPS = [
@@ -91,6 +73,7 @@ const MARQUEE_CONTENT_CSS_PROPS = [
 const SCROLL_TIME_SCALE_SMOOTHING_SECONDS = 0.12;
 const TOUCH_INPUT_QUERY = '(hover: none) and (pointer: coarse)';
 const TOUCH_SCROLL_EDGE_THRESHOLD = 1;
+const TOUCH_SCROLL_IDLE_DELAY = 250;
 
 // Server imports do not need a DOM; element construction still requires a browser.
 const HTMLElementBase = (globalThis.HTMLElement ?? class {}) as typeof HTMLElement;
@@ -201,6 +184,7 @@ export class MarqueeContent extends HTMLElementBase {
   private reducedMotion = false;
   private touchInput = false;
   private isListeningToScroll = false;
+  private isListeningToTouch = false;
 
   private distance = 0;
   private containerWidth = 0;
@@ -220,6 +204,9 @@ export class MarqueeContent extends HTMLElementBase {
   private scrollBoostStartedAt = 0;
   private lastScrollY = 0;
   private lastScrollTime = 0;
+  private lastTouchY: number | null = null;
+  private touchScrollDirection: 1 | -1 | 0 = 0;
+  private touchScrollResetTimer: number | null = null;
 
   constructor() {
     if (typeof HTMLElement === 'undefined') {
@@ -378,14 +365,6 @@ export class MarqueeContent extends HTMLElementBase {
 
   set pauseOnHover(value: boolean | string | null | undefined) {
     this.setNullableAttribute('pause-on-hover', value);
-  }
-
-  get responsiveSpeed(): boolean {
-    return this.options.responsiveSpeed;
-  }
-
-  set responsiveSpeed(value: boolean | string | null | undefined) {
-    this.setNullableAttribute('responsive-speed', value);
   }
 
   update(options: MarqueeContentOptions = {}): void {
@@ -562,6 +541,10 @@ export class MarqueeContent extends HTMLElementBase {
     this.lastScrollY = currentScrollY;
     this.lastScrollTime = now;
 
+    if (this.touchInput) {
+      this.scheduleTouchScrollReset();
+    }
+
     if (Math.abs(deltaY) < 0.5) {
       return;
     }
@@ -569,6 +552,16 @@ export class MarqueeContent extends HTMLElementBase {
     const velocity = deltaY / deltaTime;
 
     const direction = velocity >= 0 ? 1 : -1;
+    // A rubber-band return can cross back inside the page bounds. Only accept
+    // motion matching the finger, including its momentum after touchend.
+    if (
+      this.touchInput &&
+      ((this.lastTouchY !== null && this.touchScrollDirection === 0) ||
+        (this.touchScrollDirection !== 0 && direction !== this.touchScrollDirection))
+    ) {
+      return;
+    }
+
     const directionChanged = direction !== this.scrollDirectionFactor;
     this.scrollDirectionFactor = direction;
 
@@ -595,6 +588,70 @@ export class MarqueeContent extends HTMLElementBase {
     this.onScrollBoostChanged();
   };
 
+  private handleTouchStart = (event: TouchEvent): void => {
+    this.resetTouchScroll();
+    const touch = event.touches.length === 1 ? event.touches[0] : null;
+    if (touch) {
+      this.lastTouchY = touch.clientY;
+    }
+  };
+
+  private handleTouchMove = (event: TouchEvent): void => {
+    if (event.touches.length !== 1) {
+      this.resetTouchScroll();
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch || this.lastTouchY === null) {
+      return;
+    }
+    const deltaY = this.lastTouchY - touch.clientY;
+    if (Math.abs(deltaY) < 0.5) {
+      return;
+    }
+    this.lastTouchY = touch.clientY;
+    this.touchScrollDirection = deltaY > 0 ? 1 : -1;
+  };
+
+  private handleTouchEnd = (event: TouchEvent): void => {
+    if (event.touches.length > 0) {
+      this.resetTouchScroll();
+      return;
+    }
+    this.lastTouchY = null;
+    this.scheduleTouchScrollReset();
+  };
+
+  private handleScrollEnd = (): void => {
+    if (this.lastTouchY === null) {
+      this.resetTouchScroll();
+    }
+  };
+
+  private scheduleTouchScrollReset(): void {
+    if (this.touchScrollResetTimer !== null) {
+      window.clearTimeout(this.touchScrollResetTimer);
+      this.touchScrollResetTimer = null;
+    }
+    if (this.lastTouchY === null && this.touchScrollDirection !== 0) {
+      // Also release intent when a gesture scrolls a nested element, or on Safari
+      // versions without scrollend. Every page scroll extends this idle window.
+      this.touchScrollResetTimer = window.setTimeout(
+        this.resetTouchScroll,
+        TOUCH_SCROLL_IDLE_DELAY,
+      );
+    }
+  }
+
+  private resetTouchScroll = (): void => {
+    if (this.touchScrollResetTimer !== null) {
+      window.clearTimeout(this.touchScrollResetTimer);
+      this.touchScrollResetTimer = null;
+    }
+    this.lastTouchY = null;
+    this.touchScrollDirection = 0;
+  };
+
   private onScrollBoostChanged(): void {
     if (!this.mounted || this.getEffectiveMode() !== 'scroll' || this.reducedMotion) {
       return;
@@ -616,19 +673,44 @@ export class MarqueeContent extends HTMLElementBase {
   private updateScrollListener(
     shouldListen = this.mounted && this.options.mode === 'scroll',
   ): void {
-    if (shouldListen === this.isListeningToScroll) {
-      return;
+    if (shouldListen !== this.isListeningToScroll) {
+      if (shouldListen) {
+        this.lastScrollY = this.getScrollY();
+        this.lastScrollTime = performance.now();
+        window.addEventListener('scroll', this.handleScroll, { passive: true });
+      } else {
+        window.removeEventListener('scroll', this.handleScroll);
+      }
+      this.isListeningToScroll = shouldListen;
     }
 
-    if (shouldListen) {
-      this.lastScrollY = this.getScrollY();
-      this.lastScrollTime = performance.now();
-      window.addEventListener('scroll', this.handleScroll, { passive: true });
-    } else {
-      window.removeEventListener('scroll', this.handleScroll);
+    const shouldListenToTouch = shouldListen && this.touchInput;
+    if (shouldListenToTouch !== this.isListeningToTouch) {
+      if (shouldListenToTouch) {
+        window.addEventListener('touchstart', this.handleTouchStart, {
+          passive: true,
+          capture: true,
+        });
+        window.addEventListener('touchmove', this.handleTouchMove, {
+          passive: true,
+          capture: true,
+        });
+        window.addEventListener('touchend', this.handleTouchEnd, { passive: true, capture: true });
+        window.addEventListener('touchcancel', this.handleTouchEnd, {
+          passive: true,
+          capture: true,
+        });
+        window.addEventListener('scrollend', this.handleScrollEnd);
+      } else {
+        window.removeEventListener('touchstart', this.handleTouchStart, true);
+        window.removeEventListener('touchmove', this.handleTouchMove, true);
+        window.removeEventListener('touchend', this.handleTouchEnd, true);
+        window.removeEventListener('touchcancel', this.handleTouchEnd, true);
+        window.removeEventListener('scrollend', this.handleScrollEnd);
+        this.resetTouchScroll();
+      }
+      this.isListeningToTouch = shouldListenToTouch;
     }
-
-    this.isListeningToScroll = shouldListen;
   }
 
   private scheduleRebuild = (): void => {
@@ -661,7 +743,7 @@ export class MarqueeContent extends HTMLElementBase {
     const progress = this.scrollAnimation
       ? this.getScrollAnimationProgress()
       : (this.getAutoAnimation()?.effect?.getComputedTiming().progress ?? this.scrollProgress);
-    this.scrollBaseSpeed = this.getCurrentSpeed(this.clientWidth);
+    this.scrollBaseSpeed = this.options.speed;
     const duration = this.distance / this.scrollBaseSpeed;
 
     this.setAttribute('data-marquee-content-mode', this.options.mode);
@@ -972,6 +1054,8 @@ export class MarqueeContent extends HTMLElementBase {
     }
 
     this.touchInput = event.matches;
+    this.lastScrollY = this.getScrollY();
+    this.lastScrollTime = performance.now();
     this.stopAnimationLoop();
     this.cancelScrollAnimation();
     this.scrollMotionActive = false;
@@ -1309,20 +1393,6 @@ export class MarqueeContent extends HTMLElementBase {
     return this.scrollBoostStartValue * (1 - easedProgress);
   }
 
-  private getCurrentSpeed(containerWidth: number): number {
-    if (!this.options.responsiveSpeed) {
-      return this.options.speed;
-    }
-
-    const factor = this.clamp(
-      containerWidth / this.options.referenceWidth,
-      this.options.minSpeedFactor,
-      this.options.maxSpeedFactor,
-    );
-
-    return this.options.speed * factor;
-  }
-
   private resolveOptions(): MarqueeContentResolvedOptions {
     return {
       ...DEFAULT_OPTIONS,
@@ -1332,10 +1402,6 @@ export class MarqueeContent extends HTMLElementBase {
       pauseOnHover: this.parseBoolean(
         this.getAttribute('pause-on-hover'),
         DEFAULT_OPTIONS.pauseOnHover,
-      ),
-      responsiveSpeed: this.parseBoolean(
-        this.getAttribute('responsive-speed'),
-        DEFAULT_OPTIONS.responsiveSpeed,
       ),
     };
   }

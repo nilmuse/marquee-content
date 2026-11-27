@@ -269,79 +269,20 @@ test('keeps the seam aligned after style overrides, CSS variables and part resiz
   await expect.poll(() => renderedReplacements(host)).toBe(0);
 });
 
-test('responsive speed defaults off and can be enabled through every public option form', async ({
-  page,
-}) => {
-  const host = await mount(page, words, 'speed="100"');
-  const speed = () => getBaseSpeed(host);
-  await expect.poll(speed).toBeCloseTo(100, 2);
-  await expect
-    .poll(() => host.evaluate((element) => (element as MarqueeContent).responsiveSpeed))
-    .toBe(false);
-
-  await host.evaluate((element) => element.setAttribute('responsive-speed', ''));
-  await expect.poll(speed).toBeCloseTo(55, 2);
-  await expect
-    .poll(() => host.evaluate((element) => (element as MarqueeContent).responsiveSpeed))
-    .toBe(true);
-
-  await host.evaluate((element) => element.removeAttribute('responsive-speed'));
-  await expect.poll(speed).toBeCloseTo(100, 2);
-  await host.evaluate((element) => element.setAttribute('responsive-speed', 'true'));
-  await expect.poll(speed).toBeCloseTo(55, 2);
-  await host.evaluate((element) => element.setAttribute('responsive-speed', 'false'));
-  await expect.poll(speed).toBeCloseTo(100, 2);
-  await expect
-    .poll(() => host.evaluate((element) => (element as MarqueeContent).responsiveSpeed))
-    .toBe(false);
-
-  await host.evaluate((element) => {
-    (element as MarqueeContent).responsiveSpeed = true;
-  });
-  await expect.poll(speed).toBeCloseTo(55, 2);
-  await host.evaluate((element) => {
-    (element as MarqueeContent).update({ responsiveSpeed: false });
-  });
-  await expect.poll(speed).toBeCloseTo(100, 2);
-  await host.evaluate((element) => {
-    (element as MarqueeContent).responsiveSpeed = null;
-  });
-  await expect.poll(speed).toBeCloseTo(100, 2);
-  await host.evaluate((element) => {
-    (element as MarqueeContent).update({ responsiveSpeed: true });
-  });
-  await expect.poll(speed).toBeCloseTo(55, 2);
-  await host.evaluate((element) => {
-    (element as MarqueeContent).update({ responsiveSpeed: null });
-  });
-  await expect.poll(speed).toBeCloseTo(100, 2);
-});
-
 for (const mode of ['auto', 'scroll'] as const) {
-  test(`responsive speed follows container resizing and clamps at both bounds in ${mode} mode`, async ({
+  test(`base speed stays fixed through container resizing and option updates in ${mode} mode`, async ({
     page,
   }) => {
-    const host = await mount(page, words, `speed="100" mode="${mode}" responsive-speed`);
+    const host = await mount(page, words, `speed="100" mode="${mode}"`);
     const speed = () => getBaseSpeed(host);
-    const widths = [
-      [360, 55],
-      [703, 55],
-      [704, 55],
-      [705, 55.078125],
-      [768, 60],
-      [1024, 80],
-      [1279, 99.921875],
-      [1280, 100],
-      [1281, 100],
-      [1600, 100],
-      [400, 55],
-    ];
 
-    for (const [width, expectedSpeed] of widths) {
-      await host.evaluate((element, value) => {
+    for (const width of [360, 768, 1024, 1280, 1600, 400]) {
+      await host.evaluate(async (element, value) => {
         element.style.width = `${value}px`;
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
       }, width);
-      await expect.poll(speed).toBeCloseTo(expectedSpeed, 4);
+      await expect.poll(speed).toBeCloseTo(100, 4);
       await expectMatchingDistance(host);
       await expect
         .poll(() =>
@@ -350,18 +291,16 @@ for (const mode of ['auto', 'scroll'] as const) {
         .toBe('running');
     }
 
-    await host.evaluate((element) => element.removeAttribute('responsive-speed'));
-    await expect.poll(speed).toBeCloseTo(100, 4);
-    for (const width of [1600, 1024, 360]) {
-      await host.evaluate((element, value) => {
-        element.style.width = `${value}px`;
-      }, width);
-      await expect.poll(speed).toBeCloseTo(100, 4);
-    }
     await host.evaluate((element) => {
-      (element as MarqueeContent).responsiveSpeed = true;
+      (element as MarqueeContent).speed = 140;
     });
-    await expect.poll(speed).toBeCloseTo(55, 4);
+    await expect.poll(speed).toBeCloseTo(140, 4);
+    await host.evaluate((element) => {
+      (element as MarqueeContent).update({ speed: 120 });
+    });
+    await expect.poll(speed).toBeCloseTo(120, 4);
+    await host.evaluate((element) => element.setAttribute('speed', '80'));
+    await expect.poll(speed).toBeCloseTo(80, 4);
   });
 }
 
@@ -375,7 +314,7 @@ test('option changes update movement without replacing decorative content', asyn
       replacements += records.length;
     });
     observer.observe(track, { childList: true });
-    (element as MarqueeContent).update({ speed: 120, direction: 'ltr', responsiveSpeed: false });
+    (element as MarqueeContent).update({ speed: 120, direction: 'ltr' });
     (element as MarqueeContent).mode = 'scroll';
     await new Promise((resolve) => window.setTimeout(resolve, 200));
     observer.disconnect();
@@ -432,7 +371,7 @@ test('preserves the visible phase when speed, direction and mode change', async 
     };
     const samples = [await sample()];
     const host = element as MarqueeContent;
-    host.update({ speed: 140, responsiveSpeed: false });
+    host.update({ speed: 140 });
     samples.push(await sample());
     host.direction = 'ltr';
     samples.push(await sample());

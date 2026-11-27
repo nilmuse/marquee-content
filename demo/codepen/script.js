@@ -1,5 +1,5 @@
 (() => {
-  const CDN = 'https://cdn.jsdelivr.net/npm/marquee-content@7.0.0-dev.0/dist/index.js';
+  const CDN = 'https://cdn.jsdelivr.net/npm/marquee-content@7.0.0-dev.4/dist/index.js';
   const $ = (id) => document.getElementById(id);
   const sample = $('sample');
   const form = $('controls');
@@ -13,7 +13,6 @@
     width: 100,
     direction: 'rtl',
     mode: 'auto',
-    responsive: false,
     hover: false,
   };
   const state = { ...defaults };
@@ -52,7 +51,7 @@
 
   function snippets() {
     const className = state.example === 'text' ? 'ticker' : 'logos';
-    const html = `<marquee-content class="${className}"\n  speed="${state.speed}" direction="${state.direction}" mode="${state.mode}"\n  responsive-speed="${state.responsive}" pause-on-hover="${state.hover}">\n${contentMarkup()}\n</marquee-content>`;
+    const html = `<marquee-content class="${className}"\n  speed="${state.speed}" direction="${state.direction}" mode="${state.mode}"\n  pause-on-hover="${state.hover}">\n${contentMarkup()}\n</marquee-content>`;
     const base = `.${className} {\n  --marquee-content-gap: ${state.gap}px;`;
     const css =
       state.example === 'text'
@@ -88,8 +87,7 @@
 
   function updateSummary() {
     const width = sample.getBoundingClientRect().width;
-    const factor = state.responsive ? Math.max(0.55, Math.min(1, width / 1280)) : 1;
-    const base = (state.speed * factor).toFixed(1).replace(/\.0$/, '');
+    const base = state.speed.toFixed(1).replace(/\.0$/, '');
     $('speed-summary').textContent =
       width > 0
         ? media.matches
@@ -115,7 +113,6 @@
       speed: state.speed,
       direction: state.direction,
       mode: state.mode,
-      'responsive-speed': state.responsive,
       'pause-on-hover': state.hover,
     })) {
       sample.setAttribute(name, String(value));
@@ -134,7 +131,7 @@
     updateSummary();
   }
 
-  for (const id of ['speed', 'gap', 'width', 'direction', 'mode', 'responsive', 'hover']) {
+  for (const id of ['speed', 'gap', 'width', 'direction', 'mode', 'hover']) {
     $(id).addEventListener('input', (event) => {
       const input = event.currentTarget;
       state[id] =
@@ -149,7 +146,7 @@
   form.addEventListener('submit', (event) => event.preventDefault());
   form.addEventListener('reset', () => {
     Object.assign(state, defaults);
-    for (const id of ['speed', 'gap', 'width', 'direction', 'mode', 'responsive', 'hover']) {
+    for (const id of ['speed', 'gap', 'width', 'direction', 'mode', 'hover']) {
       if ($(id).type === 'checkbox') $(id).checked = defaults[id];
       else $(id).value = defaults[id];
     }
