@@ -1,5 +1,5 @@
 (() => {
-  const CDN = 'https://cdn.jsdelivr.net/npm/marquee-content@7.0.0-dev.4/dist/index.js';
+  const CDN = 'https://cdn.jsdelivr.net/npm/marquee-content@7.0.0/dist/index.js';
   const $ = (id) => document.getElementById(id);
   const sample = $('sample');
   const form = $('controls');
@@ -92,7 +92,7 @@
       width > 0
         ? media.matches
           ? `${Math.round(width)} px container · static (reduced motion)`
-          : `${Math.round(width)} px container · ${base} px/s${state.mode === 'scroll' ? ' base + scroll' : ''}`
+          : `${Math.round(width)} px container · ${base} px/s${state.mode === 'scroll' ? ' base · page scroll' : ''}`
         : 'Preview hidden';
   }
 

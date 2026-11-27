@@ -34,7 +34,7 @@
     <script type="module">
       const source = new URLSearchParams(location.search).has('local')
         ? '/dist/index.js'
-        : 'https://cdn.jsdelivr.net/npm/marquee-content@7.0.0-dev.5/dist/index.js';
+        : 'https://cdn.jsdelivr.net/npm/marquee-content@7.0.0/dist/index.js';
       try {
         await import(source);
         document.getElementById('module-status').textContent = `Компонент: ${source}`;
