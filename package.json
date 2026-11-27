@@ -1,6 +1,6 @@
 {
   "name": "marquee-content",
-  "version": "7.0.0-dev.7",
+  "version": "7.0.0-dev.8",
   "description": "A lightweight Web Component for seamless decorative text and image marquees",
   "type": "module",
   "author": "Maxim <m@nilmuse.com>",
