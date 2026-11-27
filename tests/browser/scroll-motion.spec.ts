@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import type { MarqueeContent } from '../../src/marquee-content';
 
@@ -576,6 +577,104 @@ test('interior page scrolling reverses immediately before the first touchmove', 
     const reversed = getComputedStyle(track).animationDirection;
     window.setScrollY(520);
     return [reversed, getComputedStyle(track).animationDirection];
+  });
+  expect(directions).toEqual(['reverse', 'normal']);
+});
+
+test('recorded iPhone viewport rebound preserves the released gesture direction', async ({
+  page,
+}) => {
+  const trace = JSON.parse(
+    await readFile(new URL('./fixtures/iphone-viewport-rebound.json', import.meta.url), 'utf8'),
+  ) as {
+    scrollHeight: number;
+    clientHeight: number;
+    rows: {
+      type: string;
+      phase: string | null;
+      y: number;
+      innerHeight: number;
+      visualHeight: number;
+      offsetTop: number;
+      touchY?: number;
+    }[];
+  };
+  await emulateTouchInput(page, true);
+  const host = await mountScroll(page, 'speed="80"');
+  const result = await host.evaluate((element, trace) => {
+    const root = document.scrollingElement ?? document.documentElement;
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    let sample = trace.rows[0];
+    for (const property of ['scrollY', 'pageYOffset']) {
+      Object.defineProperty(window, property, { configurable: true, get: () => sample.y });
+    }
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      get: () => sample.innerHeight,
+    });
+    Object.defineProperties(root, {
+      scrollHeight: { configurable: true, value: trace.scrollHeight },
+      clientHeight: { configurable: true, value: trace.clientHeight },
+    });
+    if (window.visualViewport) {
+      Object.defineProperties(window.visualViewport, {
+        height: { configurable: true, get: () => sample.visualHeight },
+        offsetTop: { configurable: true, get: () => sample.offsetTop },
+      });
+    }
+    window.dispatchEvent(new Event('scroll'));
+    const directions: string[] = [];
+    for (sample of trace.rows.slice(1)) {
+      if (sample.type.startsWith('touch')) {
+        window.dispatchTouchInput(
+          sample.type as 'touchstart' | 'touchmove' | 'touchend',
+          sample.touchY ?? 0,
+        );
+      } else if (sample.type === 'resize' && sample.phase === 'visualViewport') {
+        window.visualViewport?.dispatchEvent(new Event('resize'));
+      } else {
+        window.dispatchEvent(new Event(sample.type));
+      }
+      if (sample.type === 'scroll') {
+        directions.push((track as HTMLElement).style.animationDirection);
+      }
+    }
+    // A fresh gesture during the correction must still react before touchmove.
+    window.dispatchTouchInput('touchstart', 200);
+    sample = { ...sample, y: 1000 };
+    window.dispatchEvent(new Event('scroll'));
+    const freshGesture = (track as HTMLElement).style.animationDirection;
+    return { directions, freshGesture };
+  }, trace);
+  expect(result.directions).toEqual(
+    Array(trace.rows.filter((row) => row.type === 'scroll').length).fill('reverse'),
+  );
+  expect(result.freshGesture).toBe('normal');
+});
+
+test('viewport resizing during an active touch keeps genuine page reversals responsive', async ({
+  page,
+}) => {
+  await emulateTouchInput(page, true);
+  await emulateScrollY(page);
+  const host = await mountScroll(page, 'speed="80"');
+  const directions = await host.evaluate((element) => {
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    const height = window.innerHeight;
+    window.setScrollY(400);
+    window.dispatchTouchInput('touchstart', 200);
+    window.dispatchTouchInput('touchmove', 160);
+    window.setScrollY(500);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: height + 50 });
+    window.dispatchEvent(new Event('resize'));
+    window.setScrollY(480);
+    const activeReversal = (track as HTMLElement).style.animationDirection;
+    window.dispatchTouchInput('touchmove', 200);
+    window.dispatchTouchInput('touchend', 200);
+    window.setScrollY(520);
+    return [activeReversal, (track as HTMLElement).style.animationDirection];
   });
   expect(directions).toEqual(['reverse', 'normal']);
 });

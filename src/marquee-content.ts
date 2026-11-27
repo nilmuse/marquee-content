@@ -204,9 +204,11 @@ export class MarqueeContent extends HTMLElementBase {
   private scrollBoostStartedAt = 0;
   private lastScrollY = 0;
   private lastScrollTime = 0;
+  private lastScrollViewportHeight = 0;
   private lastTouchY: number | null = null;
   private touchScrollDirection: 1 | -1 | 0 = 0;
   private touchOverscrollDirection: 1 | -1 | 0 = 0;
+  private touchViewportDirection: 1 | -1 | 0 = 0;
   private pendingTouchScrollDirection: 1 | -1 | 0 = 0;
   private touchScrollResetTimer: number | null = null;
 
@@ -537,6 +539,9 @@ export class MarqueeContent extends HTMLElementBase {
     const now = performance.now();
     const rawScrollY = window.scrollY || window.pageYOffset || 0;
     const currentScrollY = this.getScrollY(rawScrollY);
+    const viewportHeight = window.innerHeight;
+    const viewportResized = viewportHeight !== this.lastScrollViewportHeight;
+    this.lastScrollViewportHeight = viewportHeight;
 
     const deltaY = currentScrollY - this.lastScrollY;
     const deltaTime = Math.max((now - this.lastScrollTime) / 1000, 0.016);
@@ -545,6 +550,11 @@ export class MarqueeContent extends HTMLElementBase {
     this.lastScrollTime = now;
 
     if (this.touchInput) {
+      // Safari can adjust page position while resizing the viewport after a
+      // released gesture, before scrollY ever crosses the document bounds.
+      if (viewportResized && this.lastTouchY === null && this.touchScrollDirection !== 0) {
+        this.touchViewportDirection = this.touchScrollDirection;
+      }
       const overscroll = rawScrollY - currentScrollY;
       if (
         Math.abs(overscroll) > TOUCH_SCROLL_EDGE_THRESHOLD &&
@@ -565,6 +575,13 @@ export class MarqueeContent extends HTMLElementBase {
     const velocity = deltaY / deltaTime;
 
     const direction = velocity >= 0 ? 1 : -1;
+    if (
+      this.touchInput &&
+      this.touchViewportDirection !== 0 &&
+      direction !== this.touchViewportDirection
+    ) {
+      return;
+    }
     // Filter only an observed rubber-band return. Ordinary page scrolling must
     // not wait for touchmove, which can arrive after the corresponding scroll.
     if (
@@ -684,7 +701,9 @@ export class MarqueeContent extends HTMLElementBase {
     this.lastTouchY = null;
     this.touchScrollDirection = 0;
     this.touchOverscrollDirection = 0;
+    this.touchViewportDirection = 0;
     this.pendingTouchScrollDirection = 0;
+    this.lastScrollViewportHeight = window.innerHeight;
   };
 
   private onScrollBoostChanged(): void {
@@ -712,6 +731,7 @@ export class MarqueeContent extends HTMLElementBase {
       if (shouldListen) {
         this.lastScrollY = this.getScrollY();
         this.lastScrollTime = performance.now();
+        this.lastScrollViewportHeight = window.innerHeight;
         window.addEventListener('scroll', this.handleScroll, { passive: true });
       } else {
         window.removeEventListener('scroll', this.handleScroll);
@@ -1091,6 +1111,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.touchInput = event.matches;
     this.lastScrollY = this.getScrollY();
     this.lastScrollTime = performance.now();
+    this.lastScrollViewportHeight = window.innerHeight;
     this.stopAnimationLoop();
     this.cancelScrollAnimation();
     this.scrollMotionActive = false;

@@ -110,6 +110,8 @@ On touch devices matching `(hover: none) and (pointer: coarse)`, `scroll` follow
 
 Elastic rebound after scrolling beyond a page edge does not reverse the marquee. A deliberate reverse gesture can change direction during rebound. Moving a finger or scrolling a nested container without page movement does not change the marquee direction.
 
+Viewport resizing during the tail of a released touch scroll preserves the gesture direction. A new touch gesture resumes normal direction changes immediately.
+
 While speed is changing on a fine-pointer device, `scroll` updates the track's transform on animation frames. Once speed settles, it returns to the Web Animations API and stops the JavaScript frame loop.
 
 ## Vue 3 with Vite

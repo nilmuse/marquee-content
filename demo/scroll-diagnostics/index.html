@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>marquee-content · диагностика отскока</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 2800px; background: #f3f4ef; color: #20291e; font: 18px/1.5 system-ui, sans-serif; }
+      header { position: fixed; inset: 0 0 auto; z-index: 1; padding: 16px 0; background: #f3f4eff2; }
+      marquee-content { --marquee-content-gap: 36px; font-size: clamp(26px, 6vw, 42px); font-weight: 650; }
+      marquee-content + marquee-content { color: #65704e; }
+      main { max-width: 650px; margin: auto; padding: 170px 20px 300px; }
+      h1 { font-size: 28px; line-height: 1.2; }
+      .space { height: 1700px; border-left: 2px dashed #bcc5b3; margin: 40px 10px; }
+      code { font-size: 14px; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <marquee-content mode="scroll" speed="80" direction="rtl"><span>Отскок · верхняя строка RTL</span></marquee-content>
+      <marquee-content mode="scroll" speed="80" direction="ltr"><span>Отскок · нижняя строка LTR</span></marquee-content>
+    </header>
+    <main>
+      <h1>Диагностика отскока на iPhone</h1>
+      <p>Нажмите «Начать» в панели. Прокрутите страницу до верхнего или нижнего края и воспроизведите отскок. Сразу после ложного разворота строки нажмите «Сбой», затем сохраните JSON.</p>
+      <p>Для сравнения можно записать второй пример, где защита сработала правильно: остановите его через «Скачать JSON».</p>
+      <p id="module-status" role="status">Загрузка компонента…</p>
+      <p>Для диагностики на исходной странице добавьте туда содержимое <a href="./recorder.js">recorder.js</a> после кода компонента. Регистратор работает с уже загруженной строкой.</p>
+      <div class="space" aria-hidden="true"></div>
+      <h2>Нижний край страницы</h2>
+      <p>Обе строки остаются сверху, чтобы разворот был виден во время отскока.</p>
+    </main>
+    <script type="module">
+      const source = new URLSearchParams(location.search).has('local')
+        ? '/dist/index.js'
+        : 'https://cdn.jsdelivr.net/npm/marquee-content@7.0.0-dev.5/dist/index.js';
+      try {
+        await import(source);
+        document.getElementById('module-status').textContent = `Компонент: ${source}`;
+      } catch (error) {
+        document.getElementById('module-status').textContent = `Ошибка загрузки: ${error.message}`;
+      }
+    </script>
+    <script src="./recorder.js"></script>
+  </body>
+</html>

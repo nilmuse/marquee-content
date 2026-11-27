@@ -1,0 +1,572 @@
+{
+  "description": "Reduced numeric replay of the 2026-11-27 iPhone report: a released upward gesture followed by viewport resizing and rebound, with no further finger movement.",
+  "scrollHeight": 2810,
+  "clientHeight": 1733,
+  "rows": [
+    {
+      "t": 0,
+      "type": "start",
+      "phase": null,
+      "y": 1076,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1006,
+      "type": "touchstart",
+      "phase": "capture",
+      "y": 1076,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 832.044106183417
+    },
+    {
+      "t": 1025,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 1076,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 839.5250222230279
+    },
+    {
+      "t": 1027,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 1076,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 875.2671766345036
+    },
+    {
+      "t": 1029,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 1076,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 886.0729442472752
+    },
+    {
+      "t": 1030,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 1076,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 914.3341826191395
+    },
+    {
+      "t": 1046,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 1076,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 949.2451241373249
+    },
+    {
+      "t": 1055,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 1042,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 957.5572530702264
+    },
+    {
+      "t": 1056,
+      "type": "touchend",
+      "phase": "capture",
+      "y": 1042,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1063,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 1033,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1080,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 1001,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1096,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 966,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1113,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 932,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1130,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 899,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1146,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 868,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1163,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 838,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1179,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 808,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1196,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 780,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1213,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 752,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1229,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 726,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1246,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 700,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1263,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 675,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1280,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 651,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1296,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 628,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1313,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 605,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1330,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 584,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1346,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 562,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1363,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 542,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1380,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 522,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1396,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 503,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1413,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 485,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1430,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 466,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1450,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 458,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 1549,
+      "type": "resize",
+      "phase": "capture",
+      "y": 474,
+      "innerHeight": 1740,
+      "visualHeight": 1740,
+      "offsetTop": 0
+    },
+    {
+      "t": 1549,
+      "type": "resize",
+      "phase": "visualViewport",
+      "y": 474,
+      "innerHeight": 1740,
+      "visualHeight": 1740,
+      "offsetTop": 0
+    },
+    {
+      "t": 1550,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 474,
+      "innerHeight": 1740,
+      "visualHeight": 1740,
+      "offsetTop": 0
+    },
+    {
+      "t": 1563,
+      "type": "resize",
+      "phase": "capture",
+      "y": 489,
+      "innerHeight": 1746,
+      "visualHeight": 1746,
+      "offsetTop": 0
+    },
+    {
+      "t": 1563,
+      "type": "resize",
+      "phase": "visualViewport",
+      "y": 489,
+      "innerHeight": 1746,
+      "visualHeight": 1746,
+      "offsetTop": 0
+    },
+    {
+      "t": 1563,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 489,
+      "innerHeight": 1746,
+      "visualHeight": 1746,
+      "offsetTop": 0
+    },
+    {
+      "t": 1589,
+      "type": "resize",
+      "phase": "capture",
+      "y": 531,
+      "innerHeight": 1765,
+      "visualHeight": 1765,
+      "offsetTop": 0
+    },
+    {
+      "t": 1589,
+      "type": "resize",
+      "phase": "visualViewport",
+      "y": 531,
+      "innerHeight": 1765,
+      "visualHeight": 1765,
+      "offsetTop": 0
+    },
+    {
+      "t": 1589,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 531,
+      "innerHeight": 1765,
+      "visualHeight": 1765,
+      "offsetTop": 0
+    },
+    {
+      "t": 1696,
+      "type": "resize",
+      "phase": "visualViewport",
+      "y": 1309,
+      "innerHeight": 1807,
+      "visualHeight": 1807,
+      "offsetTop": 306
+    },
+    {
+      "t": 1696,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 1309,
+      "innerHeight": 1807,
+      "visualHeight": 1807,
+      "offsetTop": 306
+    },
+    {
+      "t": 1797,
+      "type": "resize",
+      "phase": "visualViewport",
+      "y": 1287,
+      "innerHeight": 1828,
+      "visualHeight": 1828,
+      "offsetTop": 305
+    },
+    {
+      "t": 1797,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 1287,
+      "innerHeight": 1828,
+      "visualHeight": 1828,
+      "offsetTop": 305
+    },
+    {
+      "t": 1897,
+      "type": "resize",
+      "phase": "visualViewport",
+      "y": 1135,
+      "innerHeight": 1832,
+      "visualHeight": 1832,
+      "offsetTop": 157
+    },
+    {
+      "t": 1897,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 1135,
+      "innerHeight": 1832,
+      "visualHeight": 1832,
+      "offsetTop": 157
+    },
+    {
+      "t": 1997,
+      "type": "resize",
+      "phase": "visualViewport",
+      "y": 1050,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 73
+    },
+    {
+      "t": 1998,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 1050,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 73
+    },
+    {
+      "t": 2105,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 1007,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 29.8125
+    },
+    {
+      "t": 2206,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 989,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 11.8125
+    },
+    {
+      "t": 2238,
+      "type": "resize",
+      "phase": "capture",
+      "y": 986,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 8.8125
+    },
+    {
+      "t": 2238,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 986,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 8.8125
+    },
+    {
+      "t": 2255,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 985,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 7.8125
+    },
+    {
+      "t": 2271,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 983,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 0
+    },
+    {
+      "t": 2288,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 982,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 0
+    },
+    {
+      "t": 2321,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 981,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 0
+    },
+    {
+      "t": 2338,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 980,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 0
+    },
+    {
+      "t": 2371,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 979,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 0
+    },
+    {
+      "t": 2405,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 978,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 0
+    },
+    {
+      "t": 2455,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 977,
+      "innerHeight": 1833,
+      "visualHeight": 1833,
+      "offsetTop": 0
+    }
+  ]
+}
