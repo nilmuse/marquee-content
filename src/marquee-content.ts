@@ -206,6 +206,8 @@ export class MarqueeContent extends HTMLElementBase {
   private lastScrollTime = 0;
   private lastTouchY: number | null = null;
   private touchScrollDirection: 1 | -1 | 0 = 0;
+  private touchOverscrollDirection: 1 | -1 | 0 = 0;
+  private pendingTouchScrollDirection: 1 | -1 | 0 = 0;
   private touchScrollResetTimer: number | null = null;
 
   constructor() {
@@ -533,7 +535,8 @@ export class MarqueeContent extends HTMLElementBase {
     }
 
     const now = performance.now();
-    const currentScrollY = this.getScrollY();
+    const rawScrollY = window.scrollY || window.pageYOffset || 0;
+    const currentScrollY = this.getScrollY(rawScrollY);
 
     const deltaY = currentScrollY - this.lastScrollY;
     const deltaTime = Math.max((now - this.lastScrollTime) / 1000, 0.016);
@@ -542,6 +545,16 @@ export class MarqueeContent extends HTMLElementBase {
     this.lastScrollTime = now;
 
     if (this.touchInput) {
+      const overscroll = rawScrollY - currentScrollY;
+      if (
+        Math.abs(overscroll) > TOUCH_SCROLL_EDGE_THRESHOLD &&
+        (this.lastTouchY !== null || this.touchScrollDirection !== 0)
+      ) {
+        const direction = overscroll > 0 ? 1 : -1;
+        if (this.touchScrollDirection !== -direction) {
+          this.touchOverscrollDirection = direction;
+        }
+      }
       this.scheduleTouchScrollReset();
     }
 
@@ -552,26 +565,25 @@ export class MarqueeContent extends HTMLElementBase {
     const velocity = deltaY / deltaTime;
 
     const direction = velocity >= 0 ? 1 : -1;
-    // A rubber-band return can cross back inside the page bounds. Only accept
-    // motion matching the finger, including its momentum after touchend.
+    // Filter only an observed rubber-band return. Ordinary page scrolling must
+    // not wait for touchmove, which can arrive after the corresponding scroll.
     if (
       this.touchInput &&
-      ((this.lastTouchY !== null && this.touchScrollDirection === 0) ||
-        (this.touchScrollDirection !== 0 && direction !== this.touchScrollDirection))
+      this.touchOverscrollDirection !== 0 &&
+      direction !== this.touchOverscrollDirection
     ) {
+      this.pendingTouchScrollDirection = direction;
       return;
     }
 
-    const directionChanged = direction !== this.scrollDirectionFactor;
-    this.scrollDirectionFactor = direction;
+    this.pendingTouchScrollDirection = 0;
 
     if (this.touchInput) {
-      if (directionChanged) {
-        this.applyOptions();
-      }
+      this.applyTouchScrollDirection(direction);
       return;
     }
 
+    this.scrollDirectionFactor = direction;
     const extraSpeed = this.clamp(
       velocity / this.options.scrollVelocityFactor,
       -this.options.scrollMaxExtraSpeed,
@@ -588,10 +600,19 @@ export class MarqueeContent extends HTMLElementBase {
     this.onScrollBoostChanged();
   };
 
+  private applyTouchScrollDirection(direction: 1 | -1): void {
+    if (direction !== this.scrollDirectionFactor) {
+      this.scrollDirectionFactor = direction;
+      this.applyOptions();
+    }
+  }
+
   private handleTouchStart = (event: TouchEvent): void => {
+    const overscrollDirection = this.touchOverscrollDirection;
     this.resetTouchScroll();
     const touch = event.touches.length === 1 ? event.touches[0] : null;
     if (touch) {
+      this.touchOverscrollDirection = overscrollDirection;
       this.lastTouchY = touch.clientY;
     }
   };
@@ -611,6 +632,15 @@ export class MarqueeContent extends HTMLElementBase {
     }
     this.lastTouchY = touch.clientY;
     this.touchScrollDirection = deltaY > 0 ? 1 : -1;
+    if (this.touchScrollDirection === -this.touchOverscrollDirection) {
+      this.touchOverscrollDirection = 0;
+      // A short reversal may have already scrolled before this touchmove. Use
+      // that real page movement instead of waiting for another scroll event.
+      if (this.pendingTouchScrollDirection === this.touchScrollDirection) {
+        this.applyTouchScrollDirection(this.touchScrollDirection);
+      }
+      this.pendingTouchScrollDirection = 0;
+    }
   };
 
   private handleTouchEnd = (event: TouchEvent): void => {
@@ -633,7 +663,10 @@ export class MarqueeContent extends HTMLElementBase {
       window.clearTimeout(this.touchScrollResetTimer);
       this.touchScrollResetTimer = null;
     }
-    if (this.lastTouchY === null && this.touchScrollDirection !== 0) {
+    if (
+      this.lastTouchY === null &&
+      (this.touchScrollDirection !== 0 || this.touchOverscrollDirection !== 0)
+    ) {
       // Also release intent when a gesture scrolls a nested element, or on Safari
       // versions without scrollend. Every page scroll extends this idle window.
       this.touchScrollResetTimer = window.setTimeout(
@@ -650,6 +683,8 @@ export class MarqueeContent extends HTMLElementBase {
     }
     this.lastTouchY = null;
     this.touchScrollDirection = 0;
+    this.touchOverscrollDirection = 0;
+    this.pendingTouchScrollDirection = 0;
   };
 
   private onScrollBoostChanged(): void {
@@ -1473,8 +1508,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.setAttribute(name, String(value));
   }
 
-  private getScrollY(): number {
-    const scrollY = window.scrollY || window.pageYOffset || 0;
+  private getScrollY(scrollY = window.scrollY || window.pageYOffset || 0): number {
     if (!this.touchInput) {
       return scrollY;
     }
