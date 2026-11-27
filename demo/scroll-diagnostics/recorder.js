@@ -22,7 +22,7 @@
       [hidden] { display: none !important; }
     </style>
     <section aria-label="Диагностика прокрутки marquee-content">
-      <strong>Marquee · диагностика</strong>
+      <strong>Marquee · диагностика v2</strong>
       <p id="status" role="status">Запись выключена.</p>
       <div class="buttons">
         <button id="start" type="button">Начать</button>
@@ -69,10 +69,13 @@
         scrollDirectionFactor: value('scrollDirectionFactor'),
         touchScrollDirection: value('touchScrollDirection'),
         touchOverscrollDirection: value('touchOverscrollDirection'),
+        touchViewportDirection: value('touchViewportDirection'),
+        touchStartedAtScrollEdge: value('touchStartedAtScrollEdge'),
         pendingTouchScrollDirection: value('pendingTouchScrollDirection'),
         lastTouchY: value('lastTouchY'),
         lastScrollY: value('lastScrollY'),
         lastScrollTime: value('lastScrollTime'),
+        lastScrollViewportHeight: value('lastScrollViewportHeight'),
         resetTimerPending: element.touchScrollResetTimer != null,
         cssDirection: track?.style.animationDirection ?? null,
         cssPlayState: track?.style.animationPlayState ?? null,
@@ -236,6 +239,7 @@
     lastStatusTime = started;
     const style = getComputedStyle(document.documentElement);
     metadata = {
+      recorderVersion: 2,
       startedAt: new Date().toISOString(),
       performanceStartedAt: started,
       userAgent: navigator.userAgent,
@@ -328,6 +332,7 @@
   $('download').addEventListener('click', download);
   $('copy').addEventListener('click', copy);
   window.marqueeScrollDiagnostics = {
+    version: 2,
     start,
     stop,
     failure,

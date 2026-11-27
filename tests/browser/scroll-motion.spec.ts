@@ -581,77 +581,88 @@ test('interior page scrolling reverses immediately before the first touchmove', 
   expect(directions).toEqual(['reverse', 'normal']);
 });
 
-test('recorded iPhone viewport rebound preserves the released gesture direction', async ({
-  page,
-}) => {
-  const trace = JSON.parse(
-    await readFile(new URL('./fixtures/iphone-viewport-rebound.json', import.meta.url), 'utf8'),
-  ) as {
-    scrollHeight: number;
-    clientHeight: number;
-    rows: {
-      type: string;
-      phase: string | null;
-      y: number;
-      innerHeight: number;
-      visualHeight: number;
-      offsetTop: number;
-      touchY?: number;
-    }[];
-  };
-  await emulateTouchInput(page, true);
-  const host = await mountScroll(page, 'speed="80"');
-  const result = await host.evaluate((element, trace) => {
-    const root = document.scrollingElement ?? document.documentElement;
-    const track = element.shadowRoot?.querySelector('[part~="track"]');
-    if (!track) throw new Error('Moving track is missing');
-    let sample = trace.rows[0];
-    for (const property of ['scrollY', 'pageYOffset']) {
-      Object.defineProperty(window, property, { configurable: true, get: () => sample.y });
-    }
-    Object.defineProperty(window, 'innerHeight', {
-      configurable: true,
-      get: () => sample.innerHeight,
-    });
-    Object.defineProperties(root, {
-      scrollHeight: { configurable: true, value: trace.scrollHeight },
-      clientHeight: { configurable: true, value: trace.clientHeight },
-    });
-    if (window.visualViewport) {
-      Object.defineProperties(window.visualViewport, {
-        height: { configurable: true, get: () => sample.visualHeight },
-        offsetTop: { configurable: true, get: () => sample.offsetTop },
+for (const replay of [
+  {
+    title: 'recorded iPhone viewport rebound preserves the released gesture direction',
+    fixture: 'iphone-viewport-rebound.json',
+  },
+  {
+    title: 'recorded iPhone viewport changes inside the page keep scroll direction responsive',
+    fixture: 'iphone-interior-viewport-scroll.json',
+  },
+]) {
+  test(replay.title, async ({ page }) => {
+    const trace = JSON.parse(
+      await readFile(new URL(`./fixtures/${replay.fixture}`, import.meta.url), 'utf8'),
+    ) as {
+      scrollHeight: number;
+      clientHeight: number;
+      expectedDirections?: string[];
+      rows: {
+        type: string;
+        phase: string | null;
+        y: number;
+        innerHeight: number;
+        visualHeight: number;
+        offsetTop: number;
+        touchY?: number;
+      }[];
+    };
+    await emulateTouchInput(page, true);
+    const host = await mountScroll(page, 'speed="80"');
+    const result = await host.evaluate((element, trace) => {
+      const root = document.scrollingElement ?? document.documentElement;
+      const track = element.shadowRoot?.querySelector('[part~="track"]');
+      if (!track) throw new Error('Moving track is missing');
+      let sample = trace.rows[0];
+      for (const property of ['scrollY', 'pageYOffset']) {
+        Object.defineProperty(window, property, { configurable: true, get: () => sample.y });
+      }
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        get: () => sample.innerHeight,
       });
-    }
-    window.dispatchEvent(new Event('scroll'));
-    const directions: string[] = [];
-    for (sample of trace.rows.slice(1)) {
-      if (sample.type.startsWith('touch')) {
-        window.dispatchTouchInput(
-          sample.type as 'touchstart' | 'touchmove' | 'touchend',
-          sample.touchY ?? 0,
-        );
-      } else if (sample.type === 'resize' && sample.phase === 'visualViewport') {
-        window.visualViewport?.dispatchEvent(new Event('resize'));
-      } else {
-        window.dispatchEvent(new Event(sample.type));
+      Object.defineProperties(root, {
+        scrollHeight: { configurable: true, value: trace.scrollHeight },
+        clientHeight: { configurable: true, value: trace.clientHeight },
+      });
+      if (window.visualViewport) {
+        Object.defineProperties(window.visualViewport, {
+          height: { configurable: true, get: () => sample.visualHeight },
+          offsetTop: { configurable: true, get: () => sample.offsetTop },
+        });
       }
-      if (sample.type === 'scroll') {
-        directions.push((track as HTMLElement).style.animationDirection);
+      window.dispatchEvent(new Event('scroll'));
+      const directions: string[] = [];
+      for (sample of trace.rows.slice(1)) {
+        if (sample.type.startsWith('touch')) {
+          window.dispatchTouchInput(
+            sample.type as 'touchstart' | 'touchmove' | 'touchend',
+            sample.touchY ?? 0,
+          );
+        } else if (sample.type === 'resize' && sample.phase === 'visualViewport') {
+          window.visualViewport?.dispatchEvent(new Event('resize'));
+        } else {
+          window.dispatchEvent(new Event(sample.type));
+        }
+        if (sample.type === 'scroll') {
+          directions.push((track as HTMLElement).style.animationDirection);
+        }
       }
-    }
-    // A fresh gesture during the correction must still react before touchmove.
-    window.dispatchTouchInput('touchstart', 200);
-    sample = { ...sample, y: 1000 };
-    window.dispatchEvent(new Event('scroll'));
-    const freshGesture = (track as HTMLElement).style.animationDirection;
-    return { directions, freshGesture };
-  }, trace);
-  expect(result.directions).toEqual(
-    Array(trace.rows.filter((row) => row.type === 'scroll').length).fill('reverse'),
-  );
-  expect(result.freshGesture).toBe('normal');
-});
+      // A fresh gesture during the correction must still react before touchmove.
+      window.dispatchTouchInput('touchstart', 200);
+      sample = { ...sample, y: 1000 };
+      window.dispatchEvent(new Event('scroll'));
+      const freshGesture = (track as HTMLElement).style.animationDirection;
+      return { directions, freshGesture };
+    }, trace);
+    expect(result.directions).toEqual(
+      trace.expectedDirections ??
+        Array(trace.rows.filter((row) => row.type === 'scroll').length).fill('reverse'),
+    );
+    expect(result.freshGesture).toBe('normal');
+  });
+}
 
 test('viewport resizing during an active touch keeps genuine page reversals responsive', async ({
   page,
@@ -677,6 +688,32 @@ test('viewport resizing during an active touch keeps genuine page reversals resp
     return [activeReversal, (track as HTMLElement).style.animationDirection];
   });
   expect(directions).toEqual(['reverse', 'normal']);
+});
+
+test('an active-touch resize cannot lock scroll direction delivered after touchend', async ({
+  page,
+}) => {
+  await emulateTouchInput(page, true);
+  await emulateScrollY(page);
+  const host = await mountScroll(page, 'speed="80"');
+  const directions = await host.evaluate((element) => {
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    const height = window.innerHeight;
+    window.setScrollY(0);
+    window.dispatchTouchInput('touchstart', 200);
+    window.dispatchTouchInput('touchmove', 160);
+    window.setScrollY(600);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: height + 50 });
+    window.dispatchEvent(new Event('resize'));
+    // No scroll has consumed the new height while the finger was still active.
+    window.dispatchTouchInput('touchend', 160);
+    return [580, 620, 600].map((value) => {
+      window.setScrollY(value);
+      return (track as HTMLElement).style.animationDirection;
+    });
+  });
+  expect(directions).toEqual(['reverse', 'normal', 'reverse']);
 });
 
 test('interior page scrolling after touchend ignores the previous finger direction', async ({

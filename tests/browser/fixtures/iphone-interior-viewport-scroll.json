@@ -1,0 +1,205 @@
+{
+  "description": "Reduced from inspected numeric samples in the second iPhone report (2026-11-27): a gesture starting inside the page, followed by viewport resizing and a page-direction reversal at 780 -> 656.",
+  "scrollHeight": 2810,
+  "clientHeight": 1733,
+  "expectedDirections": [
+    "normal",
+    "normal",
+    "normal",
+    "normal",
+    "normal",
+    "reverse",
+    "reverse",
+    "reverse",
+    "reverse",
+    "reverse",
+    "reverse"
+  ],
+  "rows": [
+    {
+      "t": 0,
+      "type": "start",
+      "phase": null,
+      "y": 383,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 0,
+      "type": "touchstart",
+      "phase": "capture",
+      "y": 383,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 1181.9847342585606
+    },
+    {
+      "t": 27,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 383,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 1129.6183219812824
+    },
+    {
+      "t": 43,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 383,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 1101.3570836094182
+    },
+    {
+      "t": 51,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 411,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0,
+      "touchY": 1088.8888902100662
+    },
+    {
+      "t": 52,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 411,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": 0
+    },
+    {
+      "t": 60,
+      "type": "touchmove",
+      "phase": "capture",
+      "y": 424,
+      "innerHeight": 1746,
+      "visualHeight": 1746,
+      "offsetTop": 0,
+      "touchY": 1076.4206968107142
+    },
+    {
+      "t": 68,
+      "type": "touchend",
+      "phase": "capture",
+      "y": 436,
+      "innerHeight": 1751,
+      "visualHeight": 1751,
+      "offsetTop": 0
+    },
+    {
+      "t": 79,
+      "type": "resize",
+      "phase": "capture",
+      "y": 436,
+      "innerHeight": 1751,
+      "visualHeight": 1751,
+      "offsetTop": 0
+    },
+    {
+      "t": 79,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 436,
+      "innerHeight": 1751,
+      "visualHeight": 1751,
+      "offsetTop": 0
+    },
+    {
+      "t": 185,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 588,
+      "innerHeight": 1803,
+      "visualHeight": 1803,
+      "offsetTop": 0
+    },
+    {
+      "t": 318,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 697,
+      "innerHeight": 1827,
+      "visualHeight": 1827,
+      "offsetTop": 0
+    },
+    {
+      "t": 411,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 780,
+      "innerHeight": 1832,
+      "visualHeight": 1832,
+      "offsetTop": 0
+    },
+    {
+      "t": 522,
+      "type": "resize",
+      "phase": "capture",
+      "y": 656,
+      "innerHeight": 1802,
+      "visualHeight": 1802,
+      "offsetTop": 0
+    },
+    {
+      "t": 522,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 656,
+      "innerHeight": 1802,
+      "visualHeight": 1802,
+      "offsetTop": 0
+    },
+    {
+      "t": 651,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 434,
+      "innerHeight": 1763,
+      "visualHeight": 1763,
+      "offsetTop": 0
+    },
+    {
+      "t": 718,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 252,
+      "innerHeight": 1739,
+      "visualHeight": 1739,
+      "offsetTop": 0
+    },
+    {
+      "t": 835,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": 92,
+      "innerHeight": 1734,
+      "visualHeight": 1734,
+      "offsetTop": 0
+    },
+    {
+      "t": 935,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": -22,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": -22
+    },
+    {
+      "t": 1077,
+      "type": "scroll",
+      "phase": "bubble",
+      "y": -35,
+      "innerHeight": 1733,
+      "visualHeight": 1733,
+      "offsetTop": -35
+    }
+  ]
+}

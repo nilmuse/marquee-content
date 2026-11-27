@@ -6,7 +6,7 @@ interface DiagnosticReport {
   recording: boolean;
   capacity: number;
   dropped: number;
-  metadata: { componentSources: string[]; touchInput: boolean };
+  metadata: { componentSources: string[]; touchInput: boolean; recorderVersion: number };
   records: {
     seq: number;
     t: number;
@@ -125,6 +125,7 @@ test('recording preserves scroll decisions and freezes an exportable failure tra
   expect(result.unchanged).toBe(true);
   expect(result.frozen.recording).toBe(false);
   expect(result.frozen.metadata.touchInput).toBe(true);
+  expect(result.frozen.metadata.recorderVersion).toBe(2);
   expect(result.frozen.metadata.componentSources).toContain('http://127.0.0.1:4173/dist/index.js');
   expect(result.frozen.records.some((entry) => entry.viewport.overscroll === -36)).toBe(true);
   expect(
