@@ -66,8 +66,7 @@ Calling a registration helper is only needed for an additional tag or global sty
 
 | Option (HTML / JavaScript) | Type | Default | Description |
 | --- | --- | --- | --- |
-| `speed` | `number` | `90` | Base speed in px/s, clamped to `10`–`500`. Used unchanged unless responsive speed is enabled. |
-| `responsive-speed` / `responsiveSpeed` | `boolean` | `false` | Automatically reduces movement speed in narrow containers when enabled. |
+| `speed` | `number` | `90` | Base speed in px/s, clamped to `10`–`500`. Independent of container width. |
 | `mode` | `'auto' \| 'scroll'` | `'auto'` | `'auto'` for constant movement; `'scroll'` for page-scroll response and inertia. |
 | `direction` | `'rtl' \| 'ltr'` | `'rtl'` | Base direction: right to left or left to right. |
 | `pause-on-hover` / `pauseOnHover` | `boolean` | `false` | Pauses movement while the pointer is over the host. Items remain decorative and inert. |
@@ -85,7 +84,6 @@ marquee?.update({
   mode: 'scroll',
   direction: 'ltr',
   speed: 120,
-  responsiveSpeed: false,
   pauseOnHover: true,
 });
 
@@ -110,38 +108,9 @@ On devices with a fine pointer, `scroll` listens to the window's vertical scroll
 
 On touch devices matching `(hover: none) and (pointer: coarse)`, `scroll` follows the scrolling direction at the configured constant speed, without acceleration or decay. Movement continues in the last direction after scrolling stops. The `direction` option determines the base direction, as on desktop. Direction changes preserve the current position and use a native CSS animation without a JavaScript frame loop. The component responds to changes in the input capabilities.
 
+During touch scrolling, direction changes require page movement matching the vertical finger gesture. This filters elastic rebound at the page edges, including movement back inside the scroll range. Moving a finger or scrolling a nested container alone does not change the marquee direction.
+
 While speed is changing on a fine-pointer device, `scroll` updates the track's transform on animation frames. Once speed settles, it returns to the Web Animations API and stops the JavaScript frame loop.
-
-## Responsive speed
-
-Responsive speed is disabled by default. In `auto` mode, `speed="90"` gives `90px/s` at any container width. In `scroll` mode, it sets the base speed; on fine-pointer devices, scrolling and inertia intentionally change it.
-
-Enable responsive speed to automatically slow movement in narrow containers:
-
-```html
-<marquee-content speed="90" responsive-speed>
-  <span>Slower movement in narrow containers</span>
-</marquee-content>
-```
-
-```ts
-const marquee = document.querySelector('marquee-content');
-
-if (marquee) {
-  marquee.responsiveSpeed = true;
-  // Equivalent: marquee.update({ responsiveSpeed: true });
-}
-```
-
-When enabled, scaling uses the **component's width**, in CSS pixels:
-
-```text
-effective base speed = speed × clamp(component width / 1280, 0.55, 1)
-```
-
-At widths up to `704px` (`1280 × 0.55`), speed stays at 55% of the configured value: `speed="90"` becomes `49.5px/s`. Between `704px` and `1280px`, it increases linearly. At `1280px` and above, it uses the configured speed without scaling.
-
-Remove the attribute or set `responsive-speed="false"` to disable scaling again.
 
 ## Vue 3 with Vite
 
