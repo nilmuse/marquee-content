@@ -5,6 +5,7 @@ declare global {
   interface Window {
     scrollAnimationCalls: { play: number; rate: number };
     setTouchInput: (matches: boolean) => void;
+    setScrollY: (value: number) => void;
   }
 }
 
@@ -42,6 +43,20 @@ async function scrollRuntime(host: Locator) {
     };
   });
 }
+
+async function emulateScrollY(page: Page, initialValue = 0): Promise<void> {
+  await page.addInitScript((initial) => {
+    let value = initial;
+    for (const property of ['scrollY', 'pageYOffset']) {
+      Object.defineProperty(window, property, { configurable: true, get: () => value });
+    }
+    window.setScrollY = (nextValue) => {
+      value = nextValue;
+      window.dispatchEvent(new Event('scroll'));
+    };
+  }, initialValue);
+}
+
 async function mountScroll(page: Page, attributes = ''): Promise<Locator> {
   await page.goto('/');
   await page.waitForFunction(() => Boolean(customElements.get('marquee-content')));
@@ -288,6 +303,80 @@ test('touch scroll mode follows direction at constant speed without a boost loop
       await expect(host).toHaveAttribute('data-marquee-content-mode', 'scroll');
     }
   }
+});
+
+for (const edge of ['top', 'bottom'] as const) {
+  test(`touch overscroll at the ${edge} edge preserves direction and native motion`, async ({
+    page,
+  }) => {
+    await emulateTouchInput(page, true);
+    await emulateScrollY(page);
+    const host = await mountScroll(page, 'speed="80"');
+    const maxScroll = await page.evaluate(() => {
+      const scroller = document.scrollingElement ?? document.documentElement;
+      return scroller.scrollHeight - scroller.clientHeight;
+    });
+    expect(maxScroll).toBeGreaterThan(100);
+    const edgeY = edge === 'top' ? 0 : maxScroll;
+    const towardEdge = edge === 'top' ? -1 : 1;
+
+    for (const direction of ['rtl', 'ltr'] as const) {
+      await host.evaluate((element, value) => element.setAttribute('direction', value), direction);
+      await page.evaluate(
+        ({ edgeY, towardEdge }) => {
+          window.setScrollY(edgeY - towardEdge * 100);
+          window.setScrollY(edgeY);
+        },
+        { edgeY, towardEdge },
+      );
+      const result = await host.evaluate(
+        (element, { edgeY, towardEdge }) => {
+          const track = element.shadowRoot?.querySelector('[part~="track"]');
+          if (!track) throw new Error('Moving track is missing');
+          const animation = track.getAnimations()[0];
+          const directions = [];
+          let sameAnimation = true;
+          for (const offset of [36, 60, 36, 12, 0, -0.8, 0]) {
+            window.setScrollY(edgeY + towardEdge * offset);
+            directions.push(getComputedStyle(track).animationDirection);
+            sameAnimation &&= track.getAnimations()[0] === animation;
+          }
+          return { directions, sameAnimation };
+        },
+        { edgeY, towardEdge },
+      );
+      const speed = (direction === 'rtl' ? -80 : 80) * towardEdge;
+      expect(result.directions).toEqual(Array(7).fill(speed < 0 ? 'normal' : 'reverse'));
+      expect(result.sameAnimation).toBe(true);
+      expect(Math.abs((await movement(host)) - speed)).toBeLessThan(20);
+      expect(await scrollRuntime(host)).toMatchObject({
+        activeFrame: false,
+        boost: 0,
+        nativeRunning: true,
+      });
+
+      await page.evaluate((value) => window.setScrollY(value), edgeY - towardEdge * 20);
+      expect(Math.abs((await movement(host)) + speed)).toBeLessThan(20);
+    }
+  });
+}
+
+test('touch overscroll present on connection does not seed a false reversal', async ({ page }) => {
+  await emulateTouchInput(page, true);
+  await emulateScrollY(page, 1_000_000);
+  const host = await mountScroll(page, 'speed="80"');
+  const directions = await host.evaluate((element) => {
+    const scroller = document.scrollingElement ?? document.documentElement;
+    const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    const track = element.shadowRoot?.querySelector('[part~="track"]');
+    if (!track) throw new Error('Moving track is missing');
+    return [maxScroll + 36, maxScroll + 12, maxScroll].map((value) => {
+      window.setScrollY(value);
+      return getComputedStyle(track).animationDirection;
+    });
+  });
+  expect(directions).toEqual(['normal', 'normal', 'normal']);
+  expect(Math.abs((await movement(host)) + 80)).toBeLessThan(20);
 });
 
 test('changing input capability clears boost and restores desktop scroll behavior', async ({
