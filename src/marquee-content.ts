@@ -209,6 +209,7 @@ export class MarqueeContent extends HTMLElementBase {
   private touchScrollDirection: 1 | -1 | 0 = 0;
   private touchOverscrollDirection: 1 | -1 | 0 = 0;
   private touchViewportDirection: 1 | -1 | 0 = 0;
+  private touchStartedAtScrollEdge = false;
   private pendingTouchScrollDirection: 1 | -1 | 0 = 0;
   private touchScrollResetTimer: number | null = null;
 
@@ -550,9 +551,14 @@ export class MarqueeContent extends HTMLElementBase {
     this.lastScrollTime = now;
 
     if (this.touchInput) {
-      // Safari can adjust page position while resizing the viewport after a
-      // released gesture, before scrollY ever crosses the document bounds.
-      if (viewportResized && this.lastTouchY === null && this.touchScrollDirection !== 0) {
+      // Edge gestures can recoil while the viewport resizes, even before raw
+      // overscroll is exposed. Mid-page movement must still follow page deltas.
+      if (
+        viewportResized &&
+        this.touchStartedAtScrollEdge &&
+        this.lastTouchY === null &&
+        this.touchScrollDirection !== 0
+      ) {
         this.touchViewportDirection = this.touchScrollDirection;
       }
       const overscroll = rawScrollY - currentScrollY;
@@ -631,6 +637,10 @@ export class MarqueeContent extends HTMLElementBase {
     if (touch) {
       this.touchOverscrollDirection = overscrollDirection;
       this.lastTouchY = touch.clientY;
+      const scroller = document.scrollingElement ?? document.documentElement;
+      const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const scrollY = this.getScrollY();
+      this.touchStartedAtScrollEdge = scrollY === 0 || scrollY === maxScroll;
     }
   };
 
@@ -665,6 +675,9 @@ export class MarqueeContent extends HTMLElementBase {
       this.resetTouchScroll();
       return;
     }
+    // A resize already present at release belongs to the active gesture. A
+    // delayed scroll must not mistake it for a new post-release correction.
+    this.lastScrollViewportHeight = window.innerHeight;
     this.lastTouchY = null;
     this.scheduleTouchScrollReset();
   };
@@ -702,6 +715,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.touchScrollDirection = 0;
     this.touchOverscrollDirection = 0;
     this.touchViewportDirection = 0;
+    this.touchStartedAtScrollEdge = false;
     this.pendingTouchScrollDirection = 0;
     this.lastScrollViewportHeight = window.innerHeight;
   };
