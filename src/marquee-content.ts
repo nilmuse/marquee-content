@@ -209,7 +209,7 @@ export class MarqueeContent extends HTMLElementBase {
   private touchScrollDirection: 1 | -1 | 0 = 0;
   private touchOverscrollDirection: 1 | -1 | 0 = 0;
   private touchViewportDirection: 1 | -1 | 0 = 0;
-  private touchStartedAtScrollEdge = false;
+  private touchStartedAtBottomEdge = false;
   private pendingTouchScrollDirection: 1 | -1 | 0 = 0;
   private touchScrollResetTimer: number | null = null;
 
@@ -551,11 +551,11 @@ export class MarqueeContent extends HTMLElementBase {
     this.lastScrollTime = now;
 
     if (this.touchInput) {
-      // Edge gestures can recoil while the viewport resizes, even before raw
-      // overscroll is exposed. Mid-page movement must still follow page deltas.
+      // The bottom boundary moves with viewport height. Leaving the fixed top
+      // boundary must keep following page deltas until actual overscroll occurs.
       if (
         viewportResized &&
-        this.touchStartedAtScrollEdge &&
+        this.touchStartedAtBottomEdge &&
         this.lastTouchY === null &&
         this.touchScrollDirection !== 0
       ) {
@@ -640,7 +640,7 @@ export class MarqueeContent extends HTMLElementBase {
       const scroller = document.scrollingElement ?? document.documentElement;
       const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       const scrollY = this.getScrollY();
-      this.touchStartedAtScrollEdge = scrollY === 0 || scrollY === maxScroll;
+      this.touchStartedAtBottomEdge = maxScroll > 0 && scrollY === maxScroll;
     }
   };
 
@@ -715,7 +715,7 @@ export class MarqueeContent extends HTMLElementBase {
     this.touchScrollDirection = 0;
     this.touchOverscrollDirection = 0;
     this.touchViewportDirection = 0;
-    this.touchStartedAtScrollEdge = false;
+    this.touchStartedAtBottomEdge = false;
     this.pendingTouchScrollDirection = 0;
     this.lastScrollViewportHeight = window.innerHeight;
   };

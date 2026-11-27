@@ -581,6 +581,42 @@ test('interior page scrolling reverses immediately before the first touchmove', 
   expect(directions).toEqual(['reverse', 'normal']);
 });
 
+for (const direction of ['rtl', 'ltr'] as const) {
+  test(`top-to-interior ${direction} scrolling reacts to rapid reversals before an idle pause`, async ({
+    page,
+  }) => {
+    await emulateTouchInput(page, true);
+    await emulateScrollY(page);
+    const host = await mountScroll(page, `speed="80" direction="${direction}"`);
+    const result = await host.evaluate(async (element) => {
+      const track = element.shadowRoot?.querySelector('[part~="track"]');
+      if (!track) throw new Error('Moving track is missing');
+      const height = window.innerHeight;
+      window.setScrollY(0);
+      window.dispatchTouchInput('touchstart', 200);
+      window.dispatchTouchInput('touchmove', 160);
+      window.setScrollY(500);
+      window.dispatchTouchInput('touchend', 160);
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: height + 100 });
+      window.setScrollY(600);
+      // The iPhone trace delivers page reversals without new touch events.
+      const reversePage = () =>
+        [580, 620, 570, 630].map((value) => {
+          window.setScrollY(value);
+          return (track as HTMLElement).style.animationDirection;
+        });
+      const beforePause = reversePage();
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 300));
+      return { beforePause, afterPause: reversePage() };
+    });
+    const expected =
+      direction === 'rtl'
+        ? ['reverse', 'normal', 'reverse', 'normal']
+        : ['normal', 'reverse', 'normal', 'reverse'];
+    expect(result).toEqual({ beforePause: expected, afterPause: expected });
+  });
+}
+
 for (const replay of [
   {
     title: 'recorded iPhone viewport rebound preserves the released gesture direction',
@@ -700,15 +736,17 @@ test('an active-touch resize cannot lock scroll direction delivered after touche
     const track = element.shadowRoot?.querySelector('[part~="track"]');
     if (!track) throw new Error('Moving track is missing');
     const height = window.innerHeight;
-    window.setScrollY(0);
+    const scroller = document.scrollingElement ?? document.documentElement;
+    const bottom = scroller.scrollHeight - scroller.clientHeight;
+    window.setScrollY(bottom);
     window.dispatchTouchInput('touchstart', 200);
-    window.dispatchTouchInput('touchmove', 160);
-    window.setScrollY(600);
+    window.dispatchTouchInput('touchmove', 240);
+    window.setScrollY(bottom - 100);
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: height + 50 });
     window.dispatchEvent(new Event('resize'));
     // No scroll has consumed the new height while the finger was still active.
-    window.dispatchTouchInput('touchend', 160);
-    return [580, 620, 600].map((value) => {
+    window.dispatchTouchInput('touchend', 240);
+    return [bottom - 120, bottom - 80, bottom - 100].map((value) => {
       window.setScrollY(value);
       return (track as HTMLElement).style.animationDirection;
     });
